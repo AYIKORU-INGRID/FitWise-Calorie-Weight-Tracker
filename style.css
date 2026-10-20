@@ -32,6 +32,15 @@ label input,label select{width:100%}
 input.grow{flex:1 1 140px}
 input.num{width:100px}
 .btn{border:0;background:var(--pri);color:var(--on);font:inherit;font-weight:700;padding:10px 16px;border-radius:10px;cursor:pointer}
+.scan-picker{display:block;flex:none;font-size:1rem;text-align:center;cursor:pointer}
+.scan-picker[aria-disabled="true"]{opacity:.65;cursor:wait}
+.scan-status{margin-top:10px}
+.scan-preview{display:block;width:100%;max-height:240px;object-fit:contain;border-radius:10px;margin:10px 0}
+.scan-item{display:grid;grid-template-columns:minmax(0,1fr) 100px;gap:8px;align-items:end;padding:12px 0;border-top:1px solid var(--line)}
+.scan-item label{min-width:0}
+.scan-item .scan-name{grid-column:1/-1}
+.scan-item .err,.scan-item .scan-notes{grid-column:1/-1}
+.scan-notes{color:var(--mute);font-size:.85rem}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:.85rem;padding:6px 10px;border-radius:999px;cursor:pointer}
 h2{font-size:1rem;margin:0 0 10px}

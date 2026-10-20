@@ -55,6 +55,12 @@
     <div class="stats"><div><b id="eaten">0</b>eaten</div><div><b id="goal">2000</b>daily goal</div></div>
   </div>
   <div class="card">
+    <h2>Scan a meal</h2>
+    <label class="btn scan-picker">📷 Take or choose a photo<input id="scan" type="file" accept="image/*" capture="environment" hidden></label>
+    <div id="sres" class="scan-status" role="status" aria-live="polite"></div>
+    <p class="note">AI estimates can be wrong. Review them before adding. When scanning is configured, the selected photo is sent to OpenAI for analysis and isn’t saved by this app.</p>
+  </div>
+  <div class="card">
     <h2>Add food</h2>
     <div class="row">
       <input class="grow" id="fname" placeholder="What did you eat?" maxlength="60">

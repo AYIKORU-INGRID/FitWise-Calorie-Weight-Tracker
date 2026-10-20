@@ -149,6 +149,156 @@ $('savegoals').onclick=function(){
   S.goalWt=isFinite(t)&&t>=20&&t<=400?t:null;
   save();renderWeight();renderFood();
 };
+var scanInput=$('scan');
+var scanStatus=$('sres');
+var scanPicker=scanInput.parentElement;
+var scanPreviewUrl=null;
+function scanMessage(message,isError){
+  scanStatus.textContent=message;
+  scanStatus.className='scan-status'+(isError?' err':'');
+}
+function resizePhoto(file){
+  return createImageBitmap(file).then(function(bitmap){
+    var scale=Math.min(1,1600/Math.max(bitmap.width,bitmap.height));
+    var canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.round(bitmap.width*scale));
+    canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+    canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);
+    bitmap.close();
+    return new Promise(function(resolve,reject){
+      canvas.toBlob(function(blob){
+        if(blob)resolve(blob);
+        else reject(new Error('Could not prepare this photo. Try another image.'));
+      },'image/jpeg',0.82);
+    });
+  });
+}
+function blobDataUrl(blob){
+  return new Promise(function(resolve,reject){
+    var reader=new FileReader();
+    reader.onload=function(){resolve(reader.result)};
+    reader.onerror=function(){reject(new Error('Could not read this photo.'))};
+    reader.readAsDataURL(blob);
+  });
+}
+function addScanFood(item,button){
+  var name=item.nameInput.value.trim();
+  var kcal=Number(item.kcalInput.value);
+  if(!name||name.length>60||!Number.isInteger(kcal)||kcal<1||kcal>5000){
+    item.feedback.textContent='Enter a food name and calories from 1 to 5000.';
+    item.feedback.className='err';
+    return;
+  }
+  addFood(name,kcal,$('fmeal').value);
+  button.disabled=true;
+  button.textContent='Added';
+  item.feedback.textContent='Added to today’s log.';
+  item.feedback.className='scan-notes';
+}
+function showScanResults(result,previewUrl){
+  scanStatus.textContent='';
+  scanStatus.className='scan-status';
+  if(previewUrl){
+    var image=document.createElement('img');
+    image.className='scan-preview';
+    image.src=previewUrl;
+    image.alt='Photo analyzed for food';
+    scanStatus.appendChild(image);
+  }
+  var notes=document.createElement('p');
+  notes.className='scan-notes';
+  notes.textContent=result.notes||'Review the estimates; photo-based portions can be inaccurate.';
+  scanStatus.appendChild(notes);
+  if(!result.foods.length){
+    var empty=document.createElement('p');
+    empty.className='empty';
+    empty.textContent='No food could be identified. Try a clearer photo or add the food manually.';
+    scanStatus.appendChild(empty);
+    return;
+  }
+  result.foods.forEach(function(food,index){
+    var row=document.createElement('div');
+    row.className='scan-item';
+    var nameLabel=document.createElement('label');
+    nameLabel.className='scan-name';
+    nameLabel.textContent='Food';
+    var nameInput=document.createElement('input');
+    nameInput.type='text';
+    nameInput.maxLength=60;
+    nameInput.value=food.name;
+    nameInput.setAttribute('aria-label','Food name '+(index+1));
+    nameLabel.appendChild(nameInput);
+    var portion=document.createElement('span');
+    portion.className='scan-notes';
+    portion.textContent='Estimated portion: '+food.portion;
+    var kcalLabel=document.createElement('label');
+    kcalLabel.textContent='Calories (kcal)';
+    var kcalInput=document.createElement('input');
+    kcalInput.type='number';
+    kcalInput.inputMode='numeric';
+    kcalInput.min='1';
+    kcalInput.max='5000';
+    kcalInput.step='1';
+    kcalInput.value=food.calories;
+    kcalInput.setAttribute('aria-label','Calories for '+food.name);
+    kcalLabel.appendChild(kcalInput);
+    var button=document.createElement('button');
+    button.type='button';
+    button.className='btn';
+    button.textContent='Add';
+    var feedback=document.createElement('span');
+    feedback.setAttribute('role','status');
+    var item={nameInput:nameInput,kcalInput:kcalInput,feedback:feedback};
+    button.onclick=function(){addScanFood(item,button)};
+    row.appendChild(nameLabel);
+    row.appendChild(portion);
+    row.appendChild(kcalLabel);
+    row.appendChild(button);
+    row.appendChild(feedback);
+    scanStatus.appendChild(row);
+  });
+}
+scanInput.onchange=function(){
+  var file=scanInput.files&&scanInput.files[0];
+  scanInput.value='';
+  if(!file)return;
+  if(!file.type||file.type.indexOf('image/')!==0||file.size>15*1024*1024){
+    scanMessage('Choose an image smaller than 15 MB.',true);
+    return;
+  }
+  if(scanPreviewUrl){URL.revokeObjectURL(scanPreviewUrl);scanPreviewUrl=null}
+  scanStatus.textContent='';
+  scanStatus.className='scan-status';
+  scanPicker.setAttribute('aria-disabled','true');
+  scanInput.disabled=true;
+  scanMessage('Preparing photo and asking AI to estimate the food…');
+  resizePhoto(file).then(function(blob){
+    if(blob.size>3*1024*1024)throw new Error('This photo is still too large to scan. Choose a smaller image.');
+    scanPreviewUrl=URL.createObjectURL(blob);
+    return blobDataUrl(blob);
+  }).then(function(image){
+    return fetch('/api/scan',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image:image})
+    });
+  }).then(function(response){
+    return response.json().catch(function(){
+      throw new Error('The scan service returned an invalid response.');
+    }).then(function(data){
+      if(!response.ok)throw new Error(data.error||'Could not scan this photo.');
+      return data;
+    });
+  }).then(function(result){
+    showScanResults(result,scanPreviewUrl);
+  }).catch(function(error){
+    if(scanPreviewUrl){URL.revokeObjectURL(scanPreviewUrl);scanPreviewUrl=null}
+    scanMessage(error.message||'Could not scan this photo. Try again or add the food manually.',true);
+  }).then(function(){
+    scanPicker.setAttribute('aria-disabled','false');
+    scanInput.disabled=false;
+  });
+};
 if(S.setupComplete){
   $('onb').hidden=true;
   $('tabs').hidden=false;

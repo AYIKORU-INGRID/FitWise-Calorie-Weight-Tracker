@@ -1,0 +1,14 @@
+{
+  "name": "weight-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A local calorie, weight, and water tracker with optional AI meal scanning.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check App.js && node --check server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

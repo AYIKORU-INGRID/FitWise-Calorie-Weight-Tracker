@@ -46,6 +46,20 @@ input.num{width:100px}
 .scan-item .scan-name{grid-column:1/-1}
 .scan-item .err,.scan-item .scan-notes{grid-column:1/-1}
 .scan-notes{color:var(--mute);font-size:.85rem}
+.water{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#wcount{font-size:1.6rem}
+.cnt{display:flex;gap:8px}
+.cnt button{width:40px;height:40px;border:1px solid var(--line);border-radius:50%;background:var(--bg);color:var(--ink);font:inherit;font-size:1.3rem;cursor:pointer}
+.cnt button:disabled{opacity:.45;cursor:not-allowed}
+.cups{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.cup{width:22px;height:26px;border:2px solid var(--pri);border-radius:3px 3px 7px 7px;background:var(--track)}
+.cup.filled{background:var(--pri)}
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px;align-items:end;height:120px;padding-top:10px}
+.week-day{height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px;min-width:0}
+.week-bar{width:min(20px,100%);min-height:2px;background:var(--track);border-radius:5px 5px 0 0;position:relative}
+.week-bar span{position:absolute;inset:auto 0 0;background:var(--pri);border-radius:inherit}
+.week-label{color:var(--mute);font-size:.7rem}
+.wk{display:flex;justify-content:space-between;color:var(--mute);font-size:.7rem;margin-top:4px}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:.85rem;padding:6px 10px;border-radius:999px;cursor:pointer}
 h2{font-size:1rem;margin:0 0 10px}

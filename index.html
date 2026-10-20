@@ -73,9 +73,17 @@
     <p class="note">Quick-add values are rough estimates for a typical serving. Change them to match your plate.</p>
   </div>
   <div class="card"><h2>Today’s log</h2><ul id="flist"></ul></div>
-   <div class="card"><h2>Today’s log</h2><ul id="flist"></ul></div>
-  <div class="card"><h2>Water</h2><div class="water"><div><b id="wcount" style="font-size:1.6rem">0</b> <span class="note" id="wgoal"></span></div><div class="cnt"><button id="wminus" aria-label="Remove a glass">−</button><button id="wplus" aria-label="Add a glass">+</button></div></div><div class="cups" id="cups"></div><p class="note">One glass is about 250 ml.</p></div>
-  <div class="card"><h2>Last 7 days</h2><div class="week" id="week"></div><div class="wk" id="wk"></div><p class="note" id="wksum"></p></div>
+  <div class="card">
+    <h2>Water</h2>
+    <div class="water">
+      <div><b id="wcount">0</b> <span class="note" id="wgoal"></span></div>
+      <div class="cnt"><button id="wminus" type="button" aria-label="Remove a glass">−</button><button id="wplus" type="button" aria-label="Add a glass">+</button></div>
+    </div>
+    <div class="cups" id="cups" role="img" aria-label="No water logged"></div>
+    <p class="form-message" id="water-message" role="status" aria-live="polite"></p>
+    <p class="note">One glass is about 250 ml. The 8-glass marker is a general reference, not a personal hydration target.</p>
+  </div>
+  <div class="card"><h2>Last 7 days</h2><div class="week" id="week" role="img" aria-label="Water logged over the last seven days"></div><div class="wk" id="wk"></div><p class="note" id="wksum" aria-live="polite"></p></div>
 </section>
 
 <section id="p-wt" hidden>

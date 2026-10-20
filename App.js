@@ -1,7 +1,8 @@
 (function(){
 var KEY='daily-tracker-v1';
-var S={goal:2000,goalWt:null,foods:{},weights:[],setupComplete:false};
+var S={goal:2000,goalWt:null,foods:{},weights:[],water:{},setupComplete:false};
 try{var raw=localStorage.getItem(KEY);if(raw){var p=JSON.parse(raw);if(p&&typeof p==='object')S=Object.assign(S,p)}}catch(e){}
+if(!S.water||typeof S.water!=='object'||Array.isArray(S.water))S.water={};
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){console.error('Unable to save tracker data',e);return false}}
 function $(id){return document.getElementById(id)}
 function message(id,text,isError){
@@ -120,7 +121,93 @@ function renderFood(){
   var r=$('ring');r.style.stroke=left<0?'var(--warn)':'var(--pri)';
   r.setAttribute('stroke-dashoffset',439.8*(1-Math.min(total/S.goal,1)));
   $('flist').innerHTML=items.length?items.map(function(it){return '<li><div class="nm">'+esc(it.name)+'<small>'+esc(it.meal)+'</small></div><b>'+it.kcal+'</b><button class="x" data-id="'+it.id+'" aria-label="Delete '+esc(it.name)+'">✕</button></li>'}).join(''):'<li class="empty">Nothing logged yet. Add your first meal above.</li>';
+  renderWater();
 }
+var WATER_GOAL=8;
+var WATER_MAX=40;
+function waterCount(date){
+  var count=S.water[date];
+  return Number.isInteger(count)&&count>=0&&count<=WATER_MAX?count:0;
+}
+function glassLabel(count){return count+' '+(count===1?'glass':'glasses')}
+function renderWater(){
+  var count=waterCount(day);
+  $('wcount').textContent=count;
+  $('wgoal').textContent='of '+WATER_GOAL+' glasses · '+(count*250)+' ml';
+  $('wminus').disabled=count===0;
+  $('wplus').disabled=count>=WATER_MAX||day>iso(new Date());
+  $('cups').textContent='';
+  $('cups').setAttribute('aria-label',count+' glasses logged for '+nice(day));
+  for(var i=0;i<WATER_GOAL;i++){
+    var cup=document.createElement('span');
+    cup.className='cup'+(i<count?' filled':'');
+    cup.setAttribute('aria-hidden','true');
+    $('cups').appendChild(cup);
+  }
+  var bars=$('week');
+  bars.textContent='';
+  bars.setAttribute('aria-label','Water logged over the seven days ending '+nice(day));
+  var dates=[];
+  for(var offset=6;offset>=0;offset--){
+    var date=new Date(day+'T12:00:00');
+    date.setDate(date.getDate()-offset);
+    dates.push(iso(date));
+  }
+  var counts=dates.map(waterCount);
+  var maxCount=Math.max.apply(null,[WATER_GOAL].concat(counts));
+  dates.forEach(function(date,index){
+    var entry=document.createElement('div');
+    entry.className='week-day';
+    var bar=document.createElement('div');
+    bar.className='week-bar';
+    bar.style.height=(counts[index]/maxCount*100)+'%';
+    bar.setAttribute('aria-label',glassLabel(counts[index]));
+    var label=document.createElement('span');
+    label.className='week-label';
+    label.textContent=new Date(date+'T12:00:00').toLocaleDateString('en',{weekday:'short'});
+    entry.appendChild(bar);
+    entry.appendChild(label);
+    bars.appendChild(entry);
+  });
+  $('wk').textContent='';
+  var low=document.createElement('span');
+  low.textContent='0 glasses';
+  var high=document.createElement('span');
+  high.textContent=glassLabel(maxCount);
+  $('wk').appendChild(low);
+  $('wk').appendChild(high);
+  var total=counts.reduce(function(sum,value){return sum+value},0);
+  $('wksum').textContent='Last 7 days: '+glassLabel(total)+' ('+(total*250)+' ml).';
+}
+function changeWater(delta){
+  if(day>iso(new Date())){
+    message('water-message','Water can only be logged for today or a past date.',true);
+    return;
+  }
+  var current=waterCount(day);
+  var next=current+delta;
+  if(next<0||next>WATER_MAX)return;
+  var previous=S.water;
+  var updated=Object.assign({},previous);
+  if(next===0)delete updated[day];
+  else updated[day]=next;
+  S.water=updated;
+  if(!save()){
+    S.water=previous;
+    message('water-message','Could not save water intake in browser storage. Check storage settings and try again.',true);
+    return;
+  }
+  message('water-message','',false);
+  renderWater();
+}
+$('wplus').onclick=function(){
+  if(waterCount(day)>=WATER_MAX){
+    message('water-message','Daily water entries are limited to 40 glasses.',true);
+    return;
+  }
+  changeWater(1);
+};
+$('wminus').onclick=function(){changeWater(-1)};
 function addFood(name,kcal,meal){
   if(!name||name.length>60||!Number.isInteger(kcal)||kcal<1||kcal>5000||
      ['Breakfast','Lunch','Dinner','Snack'].indexOf(meal)===-1)return false;

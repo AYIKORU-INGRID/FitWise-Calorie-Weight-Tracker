@@ -8,7 +8,7 @@ function iso(d){return d.toLocaleDateString('en-CA')}
 var day=iso(new Date());
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function nice(s){var d=new Date(s+'T12:00:00');return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}
-var QUICK=[['Rolex',550],['Chapati',250],['Posho (1 plate)',350],['Matooke (1 plate)',300],['Beans (1 cup)',230],['Rice (1 cup)',205],['Mandazi',150],['Banana',105],['Tea with sugar',50],['Milk (1 cup)',120]];
+var QUICK=[['Rolex',550],['Chapati',250],['Posho (1 plate)',350],['Matooke (1 plate)',300],['Beans (1 cup)',230],['Rice (1 cup)',205],['Mandazi',150],['Banana',105],['Tea with sugar',50],['Milk (1 cup)',120], ['Bread(2 slices)',160], ['Egg (1 large)',70]];
 $('chips').innerHTML=QUICK.map(function(q,i){return '<button class="chip" data-i="'+i+'">'+q[0]+' · '+q[1]+'</button>'}).join('');
 var mealByHour=function(){var h=new Date().getHours();return h<11?'Breakfast':h<16?'Lunch':h<21?'Dinner':'Snack'};
 

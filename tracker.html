@@ -3,52 +3,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Daily Tracker: calories and weight</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
-<style>
-:root{--bg:#eef3f4;--surface:#fff;--ink:#14262b;--mute:#5d7177;--line:#d5e0e2;--pri:#0f6b6b;--on:#fff;--warn:#d9822b;--track:#dbe7e8;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d191c;--surface:#15262a;--ink:#e6f0f1;--mute:#93aaae;--line:#264146;--pri:#4fc3b8;--on:#06201e;--warn:#f0a050;--track:#25393d;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#0d191c;--surface:#15262a;--ink:#e6f0f1;--mute:#93aaae;--line:#264146;--pri:#4fc3b8;--on:#06201e;--warn:#f0a050;--track:#25393d;color-scheme:dark}
-html{scroll-padding-top:env(safe-area-inset-top,0px)}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
-main{max-width:520px;margin:0 auto;padding:16px 16px 40px}
-h1{font-size:1.25rem;margin:4px 0 12px}
-.tabs{display:flex;gap:6px;background:var(--track);padding:4px;border-radius:12px;margin-bottom:16px}
-.tabs button{flex:1;border:0;background:none;color:var(--mute);font:inherit;font-weight:500;padding:10px;border-radius:9px;cursor:pointer}
-.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);font-weight:700}
-button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
-.datebar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-.datebar button{border:1px solid var(--line);background:var(--surface);color:var(--ink);width:40px;height:40px;border-radius:50%;font-size:1.1rem;cursor:pointer}
-.datebar strong{font-size:1rem}
-.ringwrap{position:relative;width:200px;height:200px;margin:4px auto 8px}
-.ringwrap svg{width:100%;height:100%;transform:rotate(-90deg)}
-.ringtxt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
-.ringtxt b{font-size:2.6rem;line-height:1;letter-spacing:-.03em}
-.ringtxt span{color:var(--mute);font-size:.85rem}
-.stats{display:flex;justify-content:space-around;text-align:center;color:var(--mute);font-size:.85rem}
-.stats b{display:block;color:var(--ink);font-size:1.1rem}
-.row{display:flex;gap:8px;flex-wrap:wrap}
-input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
-input.grow{flex:1 1 140px}
-input.num{width:100px}
-.btn{border:0;background:var(--pri);color:var(--on);font:inherit;font-weight:700;padding:10px 16px;border-radius:10px;cursor:pointer}
-.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:.85rem;padding:6px 10px;border-radius:999px;cursor:pointer}
-h2{font-size:1rem;margin:0 0 10px}
-.note{color:var(--mute);font-size:.8rem;margin:8px 0 0}
-ul{list-style:none;margin:0;padding:0}
-li{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
-li:first-child{border-top:0}
-li .nm{flex:1;min-width:0;overflow-wrap:anywhere}
-li small{color:var(--mute);display:block}
-li .x{border:0;background:none;color:var(--mute);font-size:1.1rem;cursor:pointer;padding:6px}
-.empty{color:var(--mute);text-align:center;padding:12px 0}
-.chart{overflow-x:auto}
-.chart svg{width:100%;height:auto;display:block}
-.big{font-size:2rem;font-weight:700;letter-spacing:-.02em}
-label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--mute);flex:1 1 120px}
-[hidden]{display:none!important}
-</style></head>
+</head>
 <body><main>
 <h1>Daily Tracker</h1>
 <div class="tabs" role="tablist">

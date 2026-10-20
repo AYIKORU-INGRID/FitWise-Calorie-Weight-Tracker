@@ -22,7 +22,13 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .stats{display:flex;justify-content:space-around;text-align:center;color:var(--mute);font-size:.85rem}
 .stats b{display:block;color:var(--ink);font-size:1.1rem}
 .row{display:flex;gap:8px;flex-wrap:wrap}
+.fgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.seg{display:flex;gap:6px}
+.seg button{flex:1;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;padding:8px 6px;border-radius:10px;cursor:pointer}
+.seg button[aria-pressed="true"]{border-color:var(--pri);background:var(--pri);color:var(--on)}
+.err{color:var(--warn);font-size:.85rem;margin:8px 0}
 input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+label input,label select{width:100%}
 input.grow{flex:1 1 140px}
 input.num{width:100px}
 .btn{border:0;background:var(--pri);color:var(--on);font:inherit;font-weight:700;padding:10px 16px;border-radius:10px;cursor:pointer}

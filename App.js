@@ -1,8 +1,8 @@
 (function(){
 var KEY='daily-tracker-v1';
-var S={goal:2000,goalWt:null,foods:{},weights:[]};
+var S={goal:2000,goalWt:null,foods:{},weights:[],setupComplete:false};
 try{var raw=localStorage.getItem(KEY);if(raw){var p=JSON.parse(raw);if(p&&typeof p==='object')S=Object.assign(S,p)}}catch(e){}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){console.error('Unable to save tracker data',e);return false}}
 function $(id){return document.getElementById(id)}
 function iso(d){return d.toLocaleDateString('en-CA')}
 var day=iso(new Date());
@@ -11,6 +11,69 @@ function nice(s){var d=new Date(s+'T12:00:00');return d.toLocaleDateString('en-G
 var QUICK=[['Rolex',550],['Chapati',250],['Posho (1 plate)',350],['Matooke (1 plate)',300],['Beans (1 cup)',230],['Rice (1 cup)',205],['Mandazi',150],['Banana',105],['Tea with sugar',50],['Milk (1 cup)',120], ['Bread(2 slices)',160], ['Egg (1 large)',70]];
 $('chips').innerHTML=QUICK.map(function(q,i){return '<button class="chip" data-i="'+i+'">'+q[0]+' · '+q[1]+'</button>'}).join('');
 var mealByHour=function(){var h=new Date().getHours();return h<11?'Breakfast':h<16?'Lunch':h<21?'Dinner':'Snack'};
+
+var selectedGoal='lose';
+var caloriesEdited=false;
+function estimateCalories(){
+  var age=Number($('oage').value),height=Number($('oht').value),weight=Number($('owt').value);
+  if(!age||!height||!weight)return null;
+  var bmr=10*weight+6.25*height-5*age+($('osex').value==='m'?5:-161);
+  var target=bmr*Number($('oactivity').value)-(selectedGoal==='lose'?500:0);
+  return Math.max(1000,Math.min(6000,Math.round(target/50)*50));
+}
+function updateSuggestion(){
+  var estimate=estimateCalories();
+  if(estimate===null){$('osug').textContent='';return}
+  $('osug').textContent='Suggested starting target: '+estimate+' kcal/day. This is a rough estimate; adjust it to suit your needs.';
+  if(!caloriesEdited)$('okcal').value=estimate;
+}
+['oage','osex','oht','owt','oactivity'].forEach(function(id){
+  $(id).addEventListener('input',updateSuggestion);
+  $(id).addEventListener('change',updateSuggestion);
+});
+$('okcal').addEventListener('input',function(){caloriesEdited=true});
+$('seg').onclick=function(e){
+  var b=e.target.closest('button[data-g]');
+  if(!b)return;
+  selectedGoal=b.dataset.g;
+  Array.prototype.forEach.call($('seg').querySelectorAll('button'),function(button){
+    button.setAttribute('aria-pressed',button===b);
+  });
+  updateSuggestion();
+};
+$('onboard-form').onsubmit=function(e){
+  e.preventDefault();
+  $('oerr').textContent='';
+  var estimate=estimateCalories();
+  var goalInput=$('okcal').value;
+  var calories=goalInput===''?estimate:Number(goalInput);
+  var goalWeight=$('ogw').value===''?null:Number($('ogw').value);
+  if(estimate===null||!isFinite(calories)||calories<1000||calories>6000||
+     (goalWeight!==null&&(!isFinite(goalWeight)||goalWeight<20||goalWeight>400))){
+    $('oerr').textContent='Check your details and enter values within the stated ranges.';
+    return;
+  }
+  S.goal=calories;
+  S.goalWt=goalWeight;
+  S.weights=Array.isArray(S.weights)?S.weights:[];
+  var today=iso(new Date());
+  if(!S.weights.some(function(item){return item.date===today})){
+    S.weights.push({date:today,kg:Math.round(Number($('owt').value)*10)/10});
+  }
+  S.setupComplete=true;
+  if(!save()){
+    S.setupComplete=false;
+    $('oerr').textContent='Could not save your setup in this browser. Check browser storage settings and try again.';
+    return;
+  }
+  $('onb').hidden=true;
+  $('tabs').hidden=false;
+  $('p-food').hidden=false;
+  $('p-wt').hidden=true;
+  $('wdate').value=today;
+  renderFood();
+  renderWeight();
+};
 
 function tab(w){var f=w==='food';$('p-food').hidden=!f;$('p-wt').hidden=f;$('t-food').setAttribute('aria-selected',f);$('t-wt').setAttribute('aria-selected',!f)}
 $('t-food').onclick=function(){tab('food')};$('t-wt').onclick=function(){tab('wt')};
@@ -86,5 +149,12 @@ $('savegoals').onclick=function(){
   S.goalWt=isFinite(t)&&t>=20&&t<=400?t:null;
   save();renderWeight();renderFood();
 };
+if(S.setupComplete){
+  $('onb').hidden=true;
+  $('tabs').hidden=false;
+  $('p-food').hidden=false;
+  $('p-wt').hidden=true;
+}
+updateSuggestion();
 renderFood();renderWeight();
 })();

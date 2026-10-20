@@ -6,36 +6,46 @@
 <link rel="stylesheet" href="style.css"></head>
 <body><main>
 <h1>Daily Tracker</h1>
-<div class="tabs" role="tablist">
+<div class="tabs" id="tabs" role="tablist" hidden>
   <button role="tab" id="t-food" aria-selected="true">Calories</button>
   <button role="tab" id="t-wt" aria-selected="false">Weight</button>
 </div>
-<section id="onb" hidden>
-  <div class="card">
-    <h2 id="otitle">Welcome! Let’s set you up</h2>
-    <p class="note" style="margin:0 0 12px">Your details are kept in your own account and used to work out your daily calorie goal.</p>
+<section id="onb">
+  <form class="card" id="onboard-form">
+    <h2>Welcome! Let’s set you up</h2>
+    <p class="note" style="margin:0 0 12px">Your entries are stored in this browser, not an account. The calorie target is a rough estimate, not medical advice.</p>
     <div class="fgrid">
-      <label style="grid-column:1/-1">Email<input id="oemail" type="email" autocomplete="email" placeholder="you@example.com"></label>
-      <label>Age<input id="oage" type="number" inputmode="numeric" min="13" max="100"></label>
-      <label>Sex (for calorie estimate)<select id="osex"><option value="f">Female</option><option value="m">Male</option></select></label>
-      <label>Height (cm)<input id="oht" type="number" inputmode="numeric" min="100" max="250"></label>
-      <label>Weight now (kg)<input id="owt" type="number" inputmode="decimal" step="0.1" min="20" max="400"></label>
+      <label>Age<input id="oage" type="number" inputmode="numeric" min="18" max="100" required></label>
+      <label>Sex used for estimate<select id="osex"><option value="f">Female</option><option value="m">Male</option></select></label>
+      <label>Height (cm)<input id="oht" type="number" inputmode="numeric" min="100" max="250" required></label>
+      <label>Weight now (kg)<input id="owt" type="number" inputmode="decimal" step="0.1" min="20" max="400" required></label>
+      <label style="grid-column:1/-1">Activity level
+        <select id="oactivity">
+          <option value="1.2">Mostly sitting</option>
+          <option value="1.375">Light activity (1–3 days/week)</option>
+          <option value="1.55">Moderate activity (3–5 days/week)</option>
+          <option value="1.725">High activity (6–7 days/week)</option>
+          <option value="1.9">Very high activity or physical job</option>
+        </select>
+      </label>
     </div>
     <h2 style="margin-top:16px">Your goal</h2>
-    <div class="seg" id="seg"><button data-g="lose">Lose weight</button><button data-g="maintain">Maintain</button><button data-g="fit">Just be fit</button></div>
+    <div class="seg" id="seg" role="group" aria-label="Choose your goal">
+      <button type="button" data-g="lose" aria-pressed="true">Lose weight</button>
+      <button type="button" data-g="maintain" aria-pressed="false">Maintain</button>
+      <button type="button" data-g="fit" aria-pressed="false">Just be fit</button>
+    </div>
     <div class="fgrid" style="margin-top:10px">
-      <label>Goal weight (kg)<input id="ogw" type="number" inputmode="decimal" step="0.1" min="20" max="400"></label>
+      <label>Goal weight (kg, optional)<input id="ogw" type="number" inputmode="decimal" step="0.1" min="20" max="400"></label>
       <label>Daily calories (optional)<input id="okcal" type="number" inputmode="numeric" min="1000" max="6000"></label>
     </div>
-    <p class="note" id="osug"></p>
+    <p class="note" id="osug" aria-live="polite"></p>
     <p class="err" id="oerr" role="alert"></p>
-    <div class="row"><button class="btn" id="osave">Save and start</button><button class="btn alt" id="ocancel" hidden>Cancel</button></div>
-  </div>
-</section>">
-
+    <button class="btn" id="osave" type="submit">Save and start</button>
+  </form>
 </section>
 
-<section id="p-food">
+<section id="p-food" hidden>
   <div class="datebar"><button id="prev" aria-label="Previous day">‹</button><strong id="dlabel"></strong><button id="next" aria-label="Next day">›</button></div>
   <div class="card">
     <div class="ringwrap">
@@ -86,4 +96,4 @@
   <div class="card"><h2>History</h2><ul id="wlist"></ul></div>
 </section>
 </main>
-<script src="app.js"></script></body></html>
+<script src="App.js"></script></body></html>

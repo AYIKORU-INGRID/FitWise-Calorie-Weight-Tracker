@@ -4,6 +4,17 @@ var S={goal:2000,goalWt:null,foods:{},weights:[],setupComplete:false};
 try{var raw=localStorage.getItem(KEY);if(raw){var p=JSON.parse(raw);if(p&&typeof p==='object')S=Object.assign(S,p)}}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){console.error('Unable to save tracker data',e);return false}}
 function $(id){return document.getElementById(id)}
+function message(id,text,isError){
+  var el=$(id);
+  el.textContent=text;
+  if(text)el.setAttribute('data-error',String(isError));
+  else el.removeAttribute('data-error');
+}
+function fieldError(input,text){
+  input.setAttribute('aria-invalid',String(Boolean(text)));
+  if(text)input.setAttribute('title',text);
+  else input.removeAttribute('title');
+}
 function iso(d){return d.toLocaleDateString('en-CA')}
 var day=iso(new Date());
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
@@ -32,6 +43,20 @@ function updateSuggestion(){
   $(id).addEventListener('change',updateSuggestion);
 });
 $('okcal').addEventListener('input',function(){caloriesEdited=true});
+$('onboard-form').addEventListener('invalid',function(e){
+  var input=e.target;
+  var reason=input.validity.valueMissing?'Please fill in this field.':
+    input.validity.rangeUnderflow?'Enter a value of at least '+input.min+'.':
+    input.validity.rangeOverflow?'Enter a value no greater than '+input.max+'.':
+    input.validity.stepMismatch?'Enter a value in the allowed increments.':
+    'Enter a valid number.';
+  $('oerr').textContent=reason;
+},true);
+Array.prototype.forEach.call($('onboard-form').querySelectorAll('input,select'),function(input){
+  input.setAttribute('aria-describedby','oerr');
+  input.addEventListener('input',function(){$('oerr').textContent=''});
+  input.addEventListener('change',function(){$('oerr').textContent=''});
+});
 $('seg').onclick=function(e){
   var b=e.target.closest('button[data-g]');
   if(!b)return;
@@ -57,12 +82,15 @@ $('onboard-form').onsubmit=function(e){
   S.goalWt=goalWeight;
   S.weights=Array.isArray(S.weights)?S.weights:[];
   var today=iso(new Date());
-  if(!S.weights.some(function(item){return item.date===today})){
-    S.weights.push({date:today,kg:Math.round(Number($('owt').value)*10)/10});
-  }
+  var previousSetup={goal:S.goal,goalWt:S.goalWt,weights:S.weights,setupComplete:S.setupComplete};
+  var hadToday=S.weights.some(function(item){return item.date===today});
+  if(!hadToday)S.weights=S.weights.concat([{date:today,kg:Math.round(Number($('owt').value)*10)/10}]);
   S.setupComplete=true;
   if(!save()){
-    S.setupComplete=false;
+    S.goal=previousSetup.goal;
+    S.goalWt=previousSetup.goalWt;
+    S.weights=previousSetup.weights;
+    S.setupComplete=previousSetup.setupComplete;
     $('oerr').textContent='Could not save your setup in this browser. Check browser storage settings and try again.';
     return;
   }
@@ -94,16 +122,53 @@ function renderFood(){
   $('flist').innerHTML=items.length?items.map(function(it){return '<li><div class="nm">'+esc(it.name)+'<small>'+esc(it.meal)+'</small></div><b>'+it.kcal+'</b><button class="x" data-id="'+it.id+'" aria-label="Delete '+esc(it.name)+'">✕</button></li>'}).join(''):'<li class="empty">Nothing logged yet. Add your first meal above.</li>';
 }
 function addFood(name,kcal,meal){
-  kcal=Math.round(Number(kcal));
-  if(!name||!isFinite(kcal)||kcal<0)return;
-  (S.foods[day]=S.foods[day]||[]).push({id:Date.now()+Math.random(),name:name,kcal:kcal,meal:meal});
-  save();renderFood();
+  if(!name||name.length>60||!Number.isInteger(kcal)||kcal<1||kcal>5000||
+     ['Breakfast','Lunch','Dinner','Snack'].indexOf(meal)===-1)return false;
+  var items=S.foods[day]||[];
+  var updated=items.concat([{id:Date.now()+Math.random(),name:name,kcal:kcal,meal:meal}]);
+  S.foods[day]=updated;
+  if(!save()){
+    if(items.length)S.foods[day]=items;
+    else delete S.foods[day];
+    return false;
+  }
+  renderFood();
+  return true;
 }
 $('addfood').onclick=function(){
-  addFood($('fname').value.trim(),$('fkcal').value,$('fmeal').value);
+  var nameInput=$('fname'),kcalInput=$('fkcal');
+  var name=nameInput.value.trim(),rawKcal=kcalInput.value,kcal=Number(rawKcal);
+  message('food-message','',false);
+  fieldError(nameInput,'');fieldError(kcalInput,'');
+  if(!name){
+    message('food-message','Enter a food name.',true);fieldError(nameInput,'Enter a food name.');nameInput.focus();return;
+  }
+  if(name.length>60){
+    message('food-message','Food names must be 60 characters or fewer.',true);fieldError(nameInput,'Food names must be 60 characters or fewer.');nameInput.focus();return;
+  }
+  if(rawKcal===''||!Number.isInteger(kcal)||kcal<1||kcal>5000){
+    var kcalError='Enter whole calories from 1 to 5000.';
+    message('food-message',kcalError,true);fieldError(kcalInput,kcalError);kcalInput.focus();return;
+  }
+  if(!addFood(name,kcal,$('fmeal').value)){
+    message('food-message','Could not save this food in browser storage. Check storage settings and try again.',true);
+    return;
+  }
+  message('food-message','Food added to today’s log.',false);
   $('fname').value='';$('fkcal').value='';$('fname').focus();
 };
-$('chips').onclick=function(e){var b=e.target.closest('.chip');if(!b)return;var q=QUICK[b.dataset.i];addFood(q[0],q[1],mealByHour())};
+[['fname','food-message'],['fkcal','food-message']].forEach(function(pair){
+  $(pair[0]).addEventListener('input',function(){
+    fieldError($(pair[0]),'');
+    message(pair[1],'',false);
+  });
+});
+$('chips').onclick=function(e){
+  var b=e.target.closest('.chip');if(!b)return;
+  var q=QUICK[b.dataset.i];
+  if(addFood(q[0],q[1],mealByHour()))message('food-message',q[0]+' added to today’s log.',false);
+  else message('food-message','Could not save this food in browser storage. Check storage settings and try again.',true);
+};
 $('flist').onclick=function(e){var b=e.target.closest('.x');if(!b)return;S.foods[day]=(S.foods[day]||[]).filter(function(x){return String(x.id)!==b.dataset.id});save();renderFood()};
 
 function sorted(){return S.weights.slice().sort(function(a,b){return a.date<b.date?-1:1})}
@@ -135,19 +200,79 @@ function renderWeight(){
   $('wlist').innerHTML=w.length?w.slice().reverse().map(function(x){return '<li><div class="nm">'+nice(x.date)+'</div><b>'+x.kg.toFixed(1)+' kg</b><button class="x" data-d="'+x.date+'" aria-label="Delete entry">✕</button></li>'}).join(''):'<li class="empty">No weights yet. Save your first one above.</li>';
 }
 $('wdate').value=iso(new Date());
+$('wdate').max=iso(new Date());
+['wkg','wdate'].forEach(function(id){
+  $(id).addEventListener('input',function(){
+    fieldError($(id),'');
+    message('weight-message','',false);
+  });
+  $(id).addEventListener('change',function(){
+    fieldError($(id),'');
+    message('weight-message','',false);
+  });
+});
 $('addwt').onclick=function(){
-  var kg=parseFloat($('wkg').value),d=$('wdate').value;
-  if(!isFinite(kg)||kg<20||kg>400||!d)return;
-  S.weights=S.weights.filter(function(x){return x.date!==d});
-  S.weights.push({date:d,kg:Math.round(kg*10)/10});
-  $('wkg').value='';save();renderWeight();
+  var weightInput=$('wkg'),dateInput=$('wdate');
+  var rawKg=weightInput.value,kg=Number(rawKg),d=dateInput.value;
+  message('weight-message','',false);
+  fieldError(weightInput,'');fieldError(dateInput,'');
+  if(rawKg===''||!isFinite(kg)||kg<20||kg>400||Math.abs(kg*10-Math.round(kg*10))>1e-8){
+    var weightError='Enter a weight from 20 to 400 kg, to one decimal place.';
+    message('weight-message',weightError,true);fieldError(weightInput,weightError);weightInput.focus();return;
+  }
+  var parsedDate=/^\d{4}-\d{2}-\d{2}$/.test(d)?new Date(d+'T12:00:00'):new Date(NaN);
+  if(!d||!isFinite(parsedDate.getTime())||iso(parsedDate)!==d){
+    var dateError='Choose a valid date.';
+    message('weight-message',dateError,true);fieldError(dateInput,dateError);dateInput.focus();return;
+  }
+  if(d>iso(new Date())){
+    var futureError='Weight entries cannot be dated in the future.';
+    message('weight-message',futureError,true);fieldError(dateInput,futureError);dateInput.focus();return;
+  }
+  var previous=S.weights;
+  var updated=previous.filter(function(x){return x.date!==d});
+  updated.push({date:d,kg:Math.round(kg*10)/10});
+  S.weights=updated;
+  if(!save()){
+    S.weights=previous;
+    message('weight-message','Could not save this weight in browser storage. Check storage settings and try again.',true);
+    return;
+  }
+  weightInput.value='';
+  message('weight-message','Weight saved.',false);
+  renderWeight();
 };
 $('wlist').onclick=function(e){var b=e.target.closest('.x');if(!b)return;S.weights=S.weights.filter(function(x){return x.date!==b.dataset.d});save();renderWeight()};
+['sgoal','swt'].forEach(function(id){
+  $(id).addEventListener('input',function(){
+    fieldError($(id),'');
+    message('goals-message','',false);
+  });
+});
 $('savegoals').onclick=function(){
-  var g=parseInt($('sgoal').value,10),t=parseFloat($('swt').value);
-  if(isFinite(g)&&g>=800&&g<=6000)S.goal=g;
-  S.goalWt=isFinite(t)&&t>=20&&t<=400?t:null;
-  save();renderWeight();renderFood();
+  var calorieInput=$('sgoal'),weightInput=$('swt');
+  var rawCalories=calorieInput.value,rawWeight=weightInput.value;
+  var calories=Number(rawCalories),goalWeight=rawWeight===''?null:Number(rawWeight);
+  message('goals-message','',false);
+  fieldError(calorieInput,'');fieldError(weightInput,'');
+  if(rawCalories===''||!Number.isInteger(calories)||calories<800||calories>6000){
+    var calorieError='Enter a whole daily calorie goal from 800 to 6000.';
+    message('goals-message',calorieError,true);fieldError(calorieInput,calorieError);calorieInput.focus();return;
+  }
+  if(goalWeight!==null&&(!isFinite(goalWeight)||goalWeight<20||goalWeight>400||
+     Math.abs(goalWeight*10-Math.round(goalWeight*10))>1e-8)){
+    var goalWeightError='Enter a goal weight from 20 to 400 kg, to one decimal place, or leave it blank.';
+    message('goals-message',goalWeightError,true);fieldError(weightInput,goalWeightError);weightInput.focus();return;
+  }
+  var previousGoal=S.goal,previousGoalWeight=S.goalWt;
+  S.goal=calories;S.goalWt=goalWeight;
+  if(!save()){
+    S.goal=previousGoal;S.goalWt=previousGoalWeight;
+    message('goals-message','Could not save your goals in browser storage. Check storage settings and try again.',true);
+    return;
+  }
+  message('goals-message','Goals saved.',false);
+  renderWeight();renderFood();
 };
 var scanInput=$('scan');
 var scanStatus=$('sres');
@@ -189,7 +314,11 @@ function addScanFood(item,button){
     item.feedback.className='err';
     return;
   }
-  addFood(name,kcal,$('fmeal').value);
+  if(!addFood(name,kcal,$('fmeal').value)){
+    item.feedback.textContent='Could not save this food. Check browser storage settings and try again.';
+    item.feedback.className='err';
+    return;
+  }
   button.disabled=true;
   button.textContent='Added';
   item.feedback.textContent='Added to today’s log.';

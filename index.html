@@ -63,24 +63,29 @@
   <div class="card">
     <h2>Add food</h2>
     <div class="row">
-      <input class="grow" id="fname" placeholder="What did you eat?" maxlength="60">
-      <input class="num" id="fkcal" type="number" inputmode="numeric" min="0" placeholder="kcal">
-      <select id="fmeal"><option>Breakfast</option><option>Lunch</option><option>Dinner</option><option>Snack</option></select>
-      <button class="btn" id="addfood">Add</button>
+      <input class="grow" id="fname" aria-label="Food name" aria-describedby="food-message" placeholder="What did you eat?" maxlength="60">
+      <input class="num" id="fkcal" type="number" inputmode="numeric" min="1" max="5000" step="1" aria-label="Calories" aria-describedby="food-message" placeholder="kcal">
+      <select id="fmeal" aria-label="Meal" aria-describedby="food-message"><option>Breakfast</option><option>Lunch</option><option>Dinner</option><option>Snack</option></select>
+      <button class="btn" id="addfood" type="button">Add</button>
     </div>
+    <p class="form-message" id="food-message" role="status" aria-live="polite"></p>
     <div class="chips" id="chips"></div>
     <p class="note">Quick-add values are rough estimates for a typical serving. Change them to match your plate.</p>
   </div>
   <div class="card"><h2>Today’s log</h2><ul id="flist"></ul></div>
+   <div class="card"><h2>Today’s log</h2><ul id="flist"></ul></div>
+  <div class="card"><h2>Water</h2><div class="water"><div><b id="wcount" style="font-size:1.6rem">0</b> <span class="note" id="wgoal"></span></div><div class="cnt"><button id="wminus" aria-label="Remove a glass">−</button><button id="wplus" aria-label="Add a glass">+</button></div></div><div class="cups" id="cups"></div><p class="note">One glass is about 250 ml.</p></div>
+  <div class="card"><h2>Last 7 days</h2><div class="week" id="week"></div><div class="wk" id="wk"></div><p class="note" id="wksum"></p></div>
 </section>
 
 <section id="p-wt" hidden>
   <div class="card">
     <div class="row" style="align-items:flex-end">
-      <label>Weight (kg)<input id="wkg" type="number" inputmode="decimal" step="0.1" min="20" max="400" placeholder="e.g. 68.4"></label>
-      <label>Date<input id="wdate" type="date"></label>
-      <button class="btn" id="addwt">Save weight</button>
+      <label>Weight (kg)<input id="wkg" type="number" inputmode="decimal" step="0.1" min="20" max="400" aria-describedby="weight-message" placeholder="e.g. 68.4"></label>
+      <label>Date<input id="wdate" type="date" aria-describedby="weight-message"></label>
+      <button class="btn" id="addwt" type="button">Save weight</button>
     </div>
+    <p class="form-message" id="weight-message" role="status" aria-live="polite"></p>
   </div>
   <div class="card">
     <div class="stats" style="text-align:left;justify-content:space-between">
@@ -93,13 +98,22 @@
   <div class="card">
     <h2>Goals</h2>
     <div class="row" style="align-items:flex-end">
-      <label>Daily calories (kcal)<input id="sgoal" type="number" inputmode="numeric" min="800" max="6000"></label>
-      <label>Goal weight (kg)<input id="swt" type="number" inputmode="decimal" step="0.1" min="20" max="400"></label>
-      <button class="btn" id="savegoals">Save goals</button>
+      <label>Daily calories (kcal)<input id="sgoal" type="number" inputmode="numeric" min="800" max="6000" aria-describedby="goals-message"></label>
+      <label>Goal weight (kg)<input id="swt" type="number" inputmode="decimal" step="0.1" min="20" max="400" aria-describedby="goals-message"></label>
+      <button class="btn" id="savegoals" type="button">Save goals</button>
     </div>
+    <p class="form-message" id="goals-message" role="status" aria-live="polite"></p>
     <p class="note">If you’re unsure what targets suit you, a doctor or dietitian can help you set them.</p>
   </div>
   <div class="card"><h2>History</h2><ul id="wlist"></ul></div>
+</section>
+<section id="p-coach" hidden>
+  <div class="card">
+    <div id="msgs"><div class="msg bot">Hi! I’m your coach. Ask me how to use the app, how your calorie goal works, or for meal ideas.</div></div>
+    <div class="row"><input class="grow" id="cin" placeholder="Ask me anything…" maxlength="300"><button class="btn" id="csend">Send</button></div>
+    <div class="chips" id="cchips"></div>
+    <p class="note">The coach gives general guidance, not medical advice.</p>
+  </div>
 </section>
 </main>
 <script src="App.js"></script></body></html>

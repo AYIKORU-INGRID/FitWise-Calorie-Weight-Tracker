@@ -27,6 +27,11 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .seg button{flex:1;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;padding:8px 6px;border-radius:10px;cursor:pointer}
 .seg button[aria-pressed="true"]{border-color:var(--pri);background:var(--pri);color:var(--on)}
 .err{color:var(--warn);font-size:.85rem;margin:8px 0}
+.form-message{min-height:0;font-size:.85rem;margin:8px 0 0}
+.form-message:empty{display:none}
+.form-message[data-error="true"]{color:var(--warn)}
+.form-message[data-error="false"]{color:var(--pri)}
+input[aria-invalid="true"],select[aria-invalid="true"]{border-color:var(--warn)}
 input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
 label input,label select{width:100%}
 input.grow{flex:1 1 140px}

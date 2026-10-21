@@ -541,6 +541,17 @@ function addChatMessage(text,role){
   bubble.scrollIntoView({block:'nearest'});
   return bubble;
 }
+function coachContext(){
+  var foods=S.foods[day]||[];
+  var latest=sorted().slice(-1)[0];
+  return {
+    dailyCalories:S.goal,
+    caloriesEaten:foods.reduce(function(total,item){return total+item.kcal},0),
+    latestWeight:latest?latest.kg:null,
+    goalWeight:S.goalWt,
+    waterGlasses:waterCount(day)
+  };
+}
 function sendChatMessage(text){
   text=(text||'').trim();
   if(!text||text.length>300||chatSend.disabled)return;
@@ -554,10 +565,11 @@ function sendChatMessage(text){
   chatInput.disabled=true;
   chatSend.textContent='Sending…';
   var messages=chatHistory.concat([{role:'user',content:text}]).slice(-12);
+  var context=coachContext();
   fetch('/api/chat',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({messages:messages})
+    body:JSON.stringify({messages:messages,context:context})
   }).then(function(response){
     return response.json().catch(function(){
       throw new Error('The coach returned an invalid response.');

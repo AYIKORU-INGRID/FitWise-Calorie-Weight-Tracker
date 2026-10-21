@@ -207,7 +207,35 @@ function validateChatMessages(value) {
   return messages;
 }
 
-async function chat(messages) {
+function validateChatContext(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    const error = new Error("Tracker context is missing or invalid.");
+    error.status = 400;
+    throw error;
+  }
+  const validNumber = (number, min, max) =>
+    typeof number === "number" && Number.isFinite(number) && number >= min && number <= max;
+  if (
+    !validNumber(value.dailyCalories, 800, 6000) ||
+    !validNumber(value.caloriesEaten, 0, 100000) ||
+    !validNumber(value.waterGlasses, 0, 40) ||
+    (value.latestWeight !== null && !validNumber(value.latestWeight, 20, 400)) ||
+    (value.goalWeight !== null && !validNumber(value.goalWeight, 20, 400))
+  ) {
+    const error = new Error("Tracker context contains invalid values.");
+    error.status = 400;
+    throw error;
+  }
+  return {
+    dailyCalories: value.dailyCalories,
+    caloriesEaten: value.caloriesEaten,
+    waterGlasses: value.waterGlasses,
+    latestWeight: value.latestWeight,
+    goalWeight: value.goalWeight
+  };
+}
+
+async function chat(messages, context) {
   if (!API_KEY) {
     const error = new Error("The coach is not configured. Set OPENAI_API_KEY in the server terminal and restart it.");
     error.status = 503;
@@ -230,7 +258,8 @@ async function chat(messages) {
         messages: [
           {
             role: "system",
-            content: "You are a supportive, practical wellness coach for a calorie and weight tracking app. Keep answers concise, friendly, non-judgmental, and focused on sustainable habits, balanced meals, and using the app. Give general information only, not diagnoses or individualized medical advice. Never encourage extreme calorie restriction, rapid weight loss, purging, or unsafe exercise. If a user describes concerning symptoms, disordered eating, pregnancy, a medical condition, or asks for a treatment plan, encourage them to consult a qualified healthcare professional. Do not claim to know the user's tracker data unless they provide it in the conversation. Do not ask for sensitive personal information."
+            content: "You are a friendly, practical in-app coach for a calorie and weight tracker. Keep answers under 120 words, concise, encouraging, and non-judgmental. Focus on this app, food, fitness, and sustainable healthy habits; consider foods familiar in Uganda when useful. Give general guidance only, not diagnoses or individualized medical advice. Never suggest very low-calorie diets, extreme fasting, meal skipping, purging, or unsafe exercise. If the user mentions an eating disorder, health condition, pregnancy, concerning symptoms, or feeling unwell, kindly suggest they consult a doctor or dietitian. Do not ask for sensitive personal information. The following tracker values are an approximate snapshot supplied by the app; use them only when relevant and do not infer information that is not included: " +
+              JSON.stringify(context)
           },
           ...messages
         ]
@@ -285,7 +314,8 @@ const server = http.createServer(async (request, response) => {
     try {
       const body = await readJson(request);
       const messages = validateChatMessages(body && body.messages);
-      sendJson(response, 200, await chat(messages));
+      const context = validateChatContext(body && body.context);
+      sendJson(response, 200, await chat(messages, context));
     } catch (error) {
       if (error.status >= 500) console.error("Coach chat failed:", error.message);
       sendJson(response, error.status || 500, { error: error.message || "Coach chat failed." });

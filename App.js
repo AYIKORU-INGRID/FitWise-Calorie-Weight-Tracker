@@ -544,6 +544,10 @@ function addChatMessage(text,role){
 function sendChatMessage(text){
   text=(text||'').trim();
   if(!text||text.length>300||chatSend.disabled)return;
+  if(window.location.protocol==='file:'){
+    addChatMessage('The coach needs the app server. In PowerShell, open the project folder, run npm start, then open http://localhost:3000.','error');
+    return;
+  }
   chatInput.value='';
   addChatMessage(text,'user');
   chatSend.disabled=true;

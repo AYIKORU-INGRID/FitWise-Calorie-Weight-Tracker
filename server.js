@@ -179,8 +179,119 @@ async function scanImage(image) {
   }
 }
 
+function validateChatMessages(value) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 12) {
+    const error = new Error("Send between 1 and 12 chat messages.");
+    error.status = 400;
+    throw error;
+  }
+  const messages = value.map((message) => {
+    if (
+      !message ||
+      !["user", "assistant"].includes(message.role) ||
+      typeof message.content !== "string" ||
+      !message.content.trim() ||
+      message.content.length > 1200
+    ) {
+      const error = new Error("A chat message is invalid or too long.");
+      error.status = 400;
+      throw error;
+    }
+    return { role: message.role, content: message.content.trim() };
+  });
+  if (messages[messages.length - 1].role !== "user") {
+    const error = new Error("Your latest chat message must be from you.");
+    error.status = 400;
+    throw error;
+  }
+  return messages;
+}
+
+async function chat(messages) {
+  if (!API_KEY) {
+    const error = new Error("The coach is not configured. Set OPENAI_API_KEY in the server terminal and restart it.");
+    error.status = 503;
+    throw error;
+  }
+
+  let upstream;
+  try {
+    upstream = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      signal: AbortSignal.timeout(30000),
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0.6,
+        max_tokens: 700,
+        messages: [
+          {
+            role: "system",
+            content: "You are a supportive, practical wellness coach for a calorie and weight tracking app. Keep answers concise, friendly, non-judgmental, and focused on sustainable habits, balanced meals, and using the app. Give general information only, not diagnoses or individualized medical advice. Never encourage extreme calorie restriction, rapid weight loss, purging, or unsafe exercise. If a user describes concerning symptoms, disordered eating, pregnancy, a medical condition, or asks for a treatment plan, encourage them to consult a qualified healthcare professional. Do not claim to know the user's tracker data unless they provide it in the conversation. Do not ask for sensitive personal information."
+          },
+          ...messages
+        ]
+      })
+    });
+  } catch (error) {
+    const failure = new Error(
+      error.name === "TimeoutError"
+        ? "The coach took too long to respond. Please try again."
+        : "Could not reach the AI service. Check your internet connection and try again."
+    );
+    failure.status = error.name === "TimeoutError" ? 504 : 502;
+    throw failure;
+  }
+
+  if (!upstream.ok) {
+    if (upstream.status === 401) {
+      const error = new Error("OpenAI rejected the API key. Check OPENAI_API_KEY in the server terminal.");
+      error.status = 502;
+      throw error;
+    }
+    if (upstream.status === 429) {
+      const error = new Error("The AI service is rate-limited or out of API credit. Check your OpenAI account and try again.");
+      error.status = 503;
+      throw error;
+    }
+    const error = new Error(`The AI service could not answer this message (HTTP ${upstream.status}).`);
+    error.status = 502;
+    throw error;
+  }
+
+  try {
+    const completion = await upstream.json();
+    const reply = completion.choices[0].message.content;
+    if (typeof reply !== "string" || !reply.trim()) throw new Error("Missing chat response.");
+    return { reply: reply.trim().slice(0, 4000) };
+  } catch (error) {
+    console.error("Invalid chat response from OpenAI:", error.message);
+    const failure = new Error("The coach returned an unreadable response. Please try again.");
+    failure.status = 502;
+    throw failure;
+  }
+}
+
 const server = http.createServer(async (request, response) => {
   const pathname = new URL(request.url, `http://${HOST}`).pathname;
+  if (request.method === "POST" && pathname === "/api/chat") {
+    if (!request.headers["content-type"]?.startsWith("application/json")) {
+      sendJson(response, 415, { error: "Send chat messages as JSON." });
+      return;
+    }
+    try {
+      const body = await readJson(request);
+      const messages = validateChatMessages(body && body.messages);
+      sendJson(response, 200, await chat(messages));
+    } catch (error) {
+      if (error.status >= 500) console.error("Coach chat failed:", error.message);
+      sendJson(response, error.status || 500, { error: error.message || "Coach chat failed." });
+    }
+    return;
+  }
   if (request.method === "POST" && pathname === "/api/scan") {
     if (!request.headers["content-type"]?.startsWith("application/json")) {
       sendJson(response, 415, { error: "Send the photo as JSON." });
@@ -221,6 +332,6 @@ const server = http.createServer(async (request, response) => {
 server.listen(PORT, HOST, () => {
   console.log(`Weight tracker ready at http://${HOST}:${PORT}`);
   if (!API_KEY) {
-    console.warn("Photo scanning is disabled. Set OPENAI_API_KEY and restart the server.");
+    console.warn("AI features are disabled. Set OPENAI_API_KEY and restart the server.");
   }
 });

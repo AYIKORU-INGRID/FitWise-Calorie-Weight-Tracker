@@ -104,8 +104,16 @@ $('onboard-form').onsubmit=function(e){
   renderWeight();
 };
 
-function tab(w){var f=w==='food';$('p-food').hidden=!f;$('p-wt').hidden=f;$('t-food').setAttribute('aria-selected',f);$('t-wt').setAttribute('aria-selected',!f)}
-$('t-food').onclick=function(){tab('food')};$('t-wt').onclick=function(){tab('wt')};
+function tab(w){
+  ['food','wt','coach'].forEach(function(name){
+    var selected=name===w;
+    $('p-'+name).hidden=!selected;
+    $('t-'+name).setAttribute('aria-selected',selected);
+  });
+}
+$('t-food').onclick=function(){tab('food')};
+$('t-wt').onclick=function(){tab('wt')};
+$('t-coach').onclick=function(){tab('coach')};
 
 function shift(n){var d=new Date(day+'T12:00:00');d.setDate(d.getDate()+n);day=iso(d);renderFood()}
 $('prev').onclick=function(){shift(-1)};$('next').onclick=function(){shift(1)};
@@ -514,6 +522,69 @@ scanInput.onchange=function(){
     scanPicker.setAttribute('aria-disabled','false');
     scanInput.disabled=false;
   });
+};
+
+var chatHistory=[];
+var chatPrompts=['How can I build a balanced meal?','How does my calorie goal work?','Give me a simple meal idea.'];
+var chatInput=$('cin');
+var chatSend=$('csend');
+var chatMessages=$('msgs');
+var chatChips=$('cchips');
+chatChips.innerHTML=chatPrompts.map(function(prompt,index){
+  return '<button class="chip" type="button" data-prompt="'+index+'">'+esc(prompt)+'</button>';
+}).join('');
+function addChatMessage(text,role){
+  var bubble=document.createElement('div');
+  bubble.className='msg '+role;
+  bubble.textContent=text;
+  chatMessages.appendChild(bubble);
+  bubble.scrollIntoView({block:'nearest'});
+  return bubble;
+}
+function sendChatMessage(text){
+  text=(text||'').trim();
+  if(!text||text.length>300||chatSend.disabled)return;
+  chatInput.value='';
+  addChatMessage(text,'user');
+  chatSend.disabled=true;
+  chatInput.disabled=true;
+  chatSend.textContent='Sending…';
+  var messages=chatHistory.concat([{role:'user',content:text}]).slice(-12);
+  fetch('/api/chat',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({messages:messages})
+  }).then(function(response){
+    return response.json().catch(function(){
+      throw new Error('The coach returned an invalid response.');
+    }).then(function(data){
+      if(!response.ok)throw new Error(data.error||'Could not send your message.');
+      return data;
+    });
+  }).then(function(data){
+    if(typeof data.reply!=='string'||!data.reply.trim())throw new Error('The coach returned an empty response. Please try again.');
+    chatHistory=messages.concat([{role:'assistant',content:data.reply}]).slice(-12);
+    addChatMessage(data.reply,'bot');
+  }).catch(function(error){
+    addChatMessage(error.message||'Could not reach the coach. Please try again.','error');
+  }).then(function(){
+    chatSend.disabled=false;
+    chatInput.disabled=false;
+    chatSend.textContent='Send';
+    chatInput.focus();
+  });
+}
+chatSend.onclick=function(){sendChatMessage(chatInput.value)};
+chatInput.addEventListener('keydown',function(event){
+  if(event.key==='Enter'&&!event.shiftKey){
+    event.preventDefault();
+    sendChatMessage(chatInput.value);
+  }
+});
+chatChips.onclick=function(event){
+  var button=event.target.closest('button[data-prompt]');
+  if(!button)return;
+  sendChatMessage(chatPrompts[Number(button.dataset.prompt)]);
 };
 if(S.setupComplete){
   $('onb').hidden=true;

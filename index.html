@@ -9,6 +9,7 @@
 <div class="tabs" id="tabs" role="tablist" hidden>
   <button role="tab" id="t-food" aria-selected="true">Calories</button>
   <button role="tab" id="t-wt" aria-selected="false">Weight</button>
+  <button role="tab" id="t-coach" aria-selected="false">Coach</button>
 </div>
 <section id="onb">
   <form class="card" id="onboard-form">
@@ -117,10 +118,11 @@
 </section>
 <section id="p-coach" hidden>
   <div class="card">
-    <div id="msgs"><div class="msg bot">Hi! I’m your coach. Ask me how to use the app, how your calorie goal works, or for meal ideas.</div></div>
-    <div class="row"><input class="grow" id="cin" placeholder="Ask me anything…" maxlength="300"><button class="btn" id="csend">Send</button></div>
+    <h2>Your coach</h2>
+    <div id="msgs" class="messages" role="log" aria-live="polite" aria-label="Chat messages"><div class="msg bot">Hi! I’m your coach. Ask me how to use the app, how your calorie goal works, or for meal ideas.</div></div>
+    <div class="row"><input class="grow" id="cin" aria-label="Message to your coach" placeholder="Ask me anything…" maxlength="300"><button class="btn" id="csend" type="button">Send</button></div>
     <div class="chips" id="cchips"></div>
-    <p class="note">The coach gives general guidance, not medical advice.</p>
+    <p class="note">The coach gives general wellness guidance, not medical advice. Don’t share sensitive personal information.</p>
   </div>
 </section>
 </main>

@@ -2,7 +2,7 @@
   "name": "weight-tracker",
   "version": "1.0.0",
   "private": true,
-  "description": "A local calorie, weight, and water tracker with optional AI meal scanning.",
+  "description": "A Supabase-backed calorie, weight, and water tracker with optional AI features.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

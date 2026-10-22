@@ -1,9 +1,42 @@
 (function(){
 var KEY='daily-tracker-v1';
-var S={goal:2000,goalWt:null,foods:{},weights:[],water:{},setupComplete:false};
-try{var raw=localStorage.getItem(KEY);if(raw){var p=JSON.parse(raw);if(p&&typeof p==='object')S=Object.assign(S,p)}}catch(e){}
-if(!S.water||typeof S.water!=='object'||Array.isArray(S.water))S.water={};
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S));return true}catch(e){console.error('Unable to save tracker data',e);return false}}
+function defaultState(){return {goal:2000,goalWt:null,foods:{},weights:[],water:{},setupComplete:false}}
+function normalizeState(value){
+  var state=defaultState();
+  if(!value||typeof value!=='object'||Array.isArray(value))return state;
+  if(Number.isInteger(value.goal)&&value.goal>=800&&value.goal<=6000)state.goal=value.goal;
+  if(value.goalWt===null||(typeof value.goalWt==='number'&&Number.isFinite(value.goalWt)&&value.goalWt>=20&&value.goalWt<=400))state.goalWt=value.goalWt;
+  if(value.foods&&typeof value.foods==='object'&&!Array.isArray(value.foods)){
+    Object.keys(value.foods).forEach(function(date){
+      var items=value.foods[date];
+      if(!Array.isArray(items))return;
+      state.foods[date]=items.filter(function(item){
+        return item&&typeof item.name==='string'&&item.name.length<=60&&Number.isInteger(item.kcal)&&item.kcal>=1&&item.kcal<=5000&&['Breakfast','Lunch','Dinner','Snack'].indexOf(item.meal)!==-1;
+      }).map(function(item){return {id:item.id||Date.now()+Math.random(),name:item.name,kcal:item.kcal,meal:item.meal}});
+    });
+  }
+  if(Array.isArray(value.weights)){
+    state.weights=value.weights.filter(function(item){
+      return item&&typeof item.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(item.date)&&typeof item.kg==='number'&&Number.isFinite(item.kg)&&item.kg>=20&&item.kg<=400;
+    }).map(function(item){return {date:item.date,kg:item.kg}});
+  }
+  if(value.water&&typeof value.water==='object'&&!Array.isArray(value.water)){
+    Object.keys(value.water).forEach(function(date){
+      var count=value.water[date];
+      if(Number.isInteger(count)&&count>=0&&count<=40)state.water[date]=count;
+    });
+  }
+  state.setupComplete=value.setupComplete===true;
+  return state;
+}
+var S=defaultState();
+var supabaseClient=null;
+var currentUser=null;
+var loadedUserId=null;
+var loadingUserId=null;
+var accountGeneration=0;
+var pendingSave=Promise.resolve(true);
+var importLegacyOnFirstLogin=false;
 function $(id){return document.getElementById(id)}
 function message(id,text,isError){
   var el=$(id);
@@ -15,6 +48,30 @@ function fieldError(input,text){
   input.setAttribute('aria-invalid',String(Boolean(text)));
   if(text)input.setAttribute('title',text);
   else input.removeAttribute('title');
+}
+async function save(){
+  if(!supabaseClient||!currentUser)return false;
+  var userId=currentUser.id;
+  var snapshot=JSON.parse(JSON.stringify(S));
+  function writeSnapshot(){
+    if(!currentUser||currentUser.id!==userId)return true;
+    return supabaseClient.from('tracker_data').upsert({
+      user_id:userId,
+      data:snapshot,
+      updated_at:new Date().toISOString()
+    },{onConflict:'user_id'}).then(function(result){
+      if(result.error)throw result.error;
+      if(currentUser&&currentUser.id===userId)message('sync-status','Saved to your account.',false);
+      return true;
+    });
+  }
+  message('sync-status','Saving to your account…',false);
+  pendingSave=pendingSave.catch(function(){return false}).then(writeSnapshot).catch(function(error){
+    console.error('Unable to save tracker data to Supabase:',error);
+    if(currentUser&&currentUser.id===userId)message('sync-status','Could not save to your account. Check your connection and Supabase setup, then try again.',true);
+    return false;
+  });
+  return pendingSave;
 }
 function iso(d){return d.toLocaleDateString('en-CA')}
 var day=iso(new Date());
@@ -67,7 +124,7 @@ $('seg').onclick=function(e){
   });
   updateSuggestion();
 };
-$('onboard-form').onsubmit=function(e){
+$('onboard-form').onsubmit=async function(e){
   e.preventDefault();
   $('oerr').textContent='';
   var estimate=estimateCalories();
@@ -79,20 +136,20 @@ $('onboard-form').onsubmit=function(e){
     $('oerr').textContent='Check your details and enter values within the stated ranges.';
     return;
   }
-  S.goal=calories;
-  S.goalWt=goalWeight;
   S.weights=Array.isArray(S.weights)?S.weights:[];
   var today=iso(new Date());
   var previousSetup={goal:S.goal,goalWt:S.goalWt,weights:S.weights,setupComplete:S.setupComplete};
+  S.goal=calories;
+  S.goalWt=goalWeight;
   var hadToday=S.weights.some(function(item){return item.date===today});
   if(!hadToday)S.weights=S.weights.concat([{date:today,kg:Math.round(Number($('owt').value)*10)/10}]);
   S.setupComplete=true;
-  if(!save()){
+  if(!await save()){
     S.goal=previousSetup.goal;
     S.goalWt=previousSetup.goalWt;
     S.weights=previousSetup.weights;
     S.setupComplete=previousSetup.setupComplete;
-    $('oerr').textContent='Could not save your setup in this browser. Check browser storage settings and try again.';
+    $('oerr').textContent='Could not save your setup to your account. Check your connection and try again.';
     return;
   }
   $('onb').hidden=true;
@@ -187,7 +244,7 @@ function renderWater(){
   var total=counts.reduce(function(sum,value){return sum+value},0);
   $('wksum').textContent='Last 7 days: '+glassLabel(total)+' ('+(total*250)+' ml).';
 }
-function changeWater(delta){
+async function changeWater(delta){
   if(day>iso(new Date())){
     message('water-message','Water can only be logged for today or a past date.',true);
     return;
@@ -200,29 +257,29 @@ function changeWater(delta){
   if(next===0)delete updated[day];
   else updated[day]=next;
   S.water=updated;
-  if(!save()){
+  if(!await save()){
     S.water=previous;
-    message('water-message','Could not save water intake in browser storage. Check storage settings and try again.',true);
+    message('water-message','Could not save water intake to your account. Check your connection and try again.',true);
     return;
   }
   message('water-message','',false);
   renderWater();
 }
-$('wplus').onclick=function(){
+$('wplus').onclick=async function(){
   if(waterCount(day)>=WATER_MAX){
     message('water-message','Daily water entries are limited to 40 glasses.',true);
     return;
   }
-  changeWater(1);
+  await changeWater(1);
 };
-$('wminus').onclick=function(){changeWater(-1)};
-function addFood(name,kcal,meal){
+ $('wminus').onclick=async function(){await changeWater(-1)};
+async function addFood(name,kcal,meal){
   if(!name||name.length>60||!Number.isInteger(kcal)||kcal<1||kcal>5000||
      ['Breakfast','Lunch','Dinner','Snack'].indexOf(meal)===-1)return false;
   var items=S.foods[day]||[];
   var updated=items.concat([{id:Date.now()+Math.random(),name:name,kcal:kcal,meal:meal}]);
   S.foods[day]=updated;
-  if(!save()){
+  if(!await save()){
     if(items.length)S.foods[day]=items;
     else delete S.foods[day];
     return false;
@@ -230,7 +287,7 @@ function addFood(name,kcal,meal){
   renderFood();
   return true;
 }
-$('addfood').onclick=function(){
+$('addfood').onclick=async function(){
   var nameInput=$('fname'),kcalInput=$('fkcal');
   var name=nameInput.value.trim(),rawKcal=kcalInput.value,kcal=Number(rawKcal);
   message('food-message','',false);
@@ -245,8 +302,8 @@ $('addfood').onclick=function(){
     var kcalError='Enter whole calories from 1 to 5000.';
     message('food-message',kcalError,true);fieldError(kcalInput,kcalError);kcalInput.focus();return;
   }
-  if(!addFood(name,kcal,$('fmeal').value)){
-    message('food-message','Could not save this food in browser storage. Check storage settings and try again.',true);
+  if(!await addFood(name,kcal,$('fmeal').value)){
+    message('food-message','Could not save this food to your account. Check your connection and try again.',true);
     return;
   }
   message('food-message','Food added to today’s log.',false);
@@ -258,13 +315,22 @@ $('addfood').onclick=function(){
     message(pair[1],'',false);
   });
 });
-$('chips').onclick=function(e){
+$('chips').onclick=async function(e){
   var b=e.target.closest('.chip');if(!b)return;
   var q=QUICK[b.dataset.i];
-  if(addFood(q[0],q[1],mealByHour()))message('food-message',q[0]+' added to today’s log.',false);
-  else message('food-message','Could not save this food in browser storage. Check storage settings and try again.',true);
+  if(await addFood(q[0],q[1],mealByHour()))message('food-message',q[0]+' added to today’s log.',false);
+  else message('food-message','Could not save this food to your account. Check your connection and try again.',true);
 };
-$('flist').onclick=function(e){var b=e.target.closest('.x');if(!b)return;S.foods[day]=(S.foods[day]||[]).filter(function(x){return String(x.id)!==b.dataset.id});save();renderFood()};
+$('flist').onclick=async function(e){
+  var b=e.target.closest('.x');if(!b)return;
+  var previous=S.foods[day]||[];
+  S.foods[day]=previous.filter(function(x){return String(x.id)!==b.dataset.id});
+  if(!await save()){
+    S.foods[day]=previous;
+    message('food-message','Could not delete this food from your account. Check your connection and try again.',true);
+  }
+  renderFood();
+};
 
 function sorted(){return S.weights.slice().sort(function(a,b){return a.date<b.date?-1:1})}
 function renderWeight(){
@@ -306,7 +372,7 @@ $('wdate').max=iso(new Date());
     message('weight-message','',false);
   });
 });
-$('addwt').onclick=function(){
+$('addwt').onclick=async function(){
   var weightInput=$('wkg'),dateInput=$('wdate');
   var rawKg=weightInput.value,kg=Number(rawKg),d=dateInput.value;
   message('weight-message','',false);
@@ -328,23 +394,32 @@ $('addwt').onclick=function(){
   var updated=previous.filter(function(x){return x.date!==d});
   updated.push({date:d,kg:Math.round(kg*10)/10});
   S.weights=updated;
-  if(!save()){
+  if(!await save()){
     S.weights=previous;
-    message('weight-message','Could not save this weight in browser storage. Check storage settings and try again.',true);
+    message('weight-message','Could not save this weight to your account. Check your connection and try again.',true);
     return;
   }
   weightInput.value='';
   message('weight-message','Weight saved.',false);
   renderWeight();
 };
-$('wlist').onclick=function(e){var b=e.target.closest('.x');if(!b)return;S.weights=S.weights.filter(function(x){return x.date!==b.dataset.d});save();renderWeight()};
+$('wlist').onclick=async function(e){
+  var b=e.target.closest('.x');if(!b)return;
+  var previous=S.weights;
+  S.weights=S.weights.filter(function(x){return x.date!==b.dataset.d});
+  if(!await save()){
+    S.weights=previous;
+    message('weight-message','Could not delete this weight from your account. Check your connection and try again.',true);
+  }
+  renderWeight();
+};
 ['sgoal','swt'].forEach(function(id){
   $(id).addEventListener('input',function(){
     fieldError($(id),'');
     message('goals-message','',false);
   });
 });
-$('savegoals').onclick=function(){
+$('savegoals').onclick=async function(){
   var calorieInput=$('sgoal'),weightInput=$('swt');
   var rawCalories=calorieInput.value,rawWeight=weightInput.value;
   var calories=Number(rawCalories),goalWeight=rawWeight===''?null:Number(rawWeight);
@@ -361,9 +436,9 @@ $('savegoals').onclick=function(){
   }
   var previousGoal=S.goal,previousGoalWeight=S.goalWt;
   S.goal=calories;S.goalWt=goalWeight;
-  if(!save()){
+  if(!await save()){
     S.goal=previousGoal;S.goalWt=previousGoalWeight;
-    message('goals-message','Could not save your goals in browser storage. Check storage settings and try again.',true);
+    message('goals-message','Could not save your goals to your account. Check your connection and try again.',true);
     return;
   }
   message('goals-message','Goals saved.',false);
@@ -401,7 +476,14 @@ function blobDataUrl(blob){
     reader.readAsDataURL(blob);
   });
 }
-function addScanFood(item,button){
+function getAuthHeaders(){
+  return supabaseClient.auth.getSession().then(function(result){
+    if(result.error)throw result.error;
+    if(!result.data.session)throw new Error('Sign in again to use this feature.');
+    return {Authorization:'Bearer '+result.data.session.access_token};
+  });
+}
+async function addScanFood(item,button){
   var name=item.nameInput.value.trim();
   var kcal=Number(item.kcalInput.value);
   if(!name||name.length>60||!Number.isInteger(kcal)||kcal<1||kcal>5000){
@@ -409,8 +491,8 @@ function addScanFood(item,button){
     item.feedback.className='err';
     return;
   }
-  if(!addFood(name,kcal,$('fmeal').value)){
-    item.feedback.textContent='Could not save this food. Check browser storage settings and try again.';
+  if(!await addFood(name,kcal,$('fmeal').value)){
+    item.feedback.textContent='Could not save this food to your account. Check your connection and try again.';
     item.feedback.className='err';
     return;
   }
@@ -501,10 +583,13 @@ scanInput.onchange=function(){
     scanPreviewUrl=URL.createObjectURL(blob);
     return blobDataUrl(blob);
   }).then(function(image){
-    return fetch('/api/scan',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({image:image})
+    return getAuthHeaders().then(function(headers){
+      headers['Content-Type']='application/json';
+      return fetch('/api/scan',{
+        method:'POST',
+        headers:headers,
+        body:JSON.stringify({image:image})
+      });
     });
   }).then(function(response){
     return response.json().catch(function(){
@@ -566,10 +651,13 @@ function sendChatMessage(text){
   chatSend.textContent='Sending…';
   var messages=chatHistory.concat([{role:'user',content:text}]).slice(-12);
   var context=coachContext();
-  fetch('/api/chat',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({messages:messages,context:context})
+  getAuthHeaders().then(function(headers){
+    headers['Content-Type']='application/json';
+    return fetch('/api/chat',{
+      method:'POST',
+      headers:headers,
+      body:JSON.stringify({messages:messages,context:context})
+    });
   }).then(function(response){
     return response.json().catch(function(){
       throw new Error('The coach returned an invalid response.');
@@ -602,12 +690,173 @@ chatChips.onclick=function(event){
   if(!button)return;
   sendChatMessage(chatPrompts[Number(button.dataset.prompt)]);
 };
-if(S.setupComplete){
+function hideTracker(){
+  $('tabs').hidden=true;
   $('onb').hidden=true;
-  $('tabs').hidden=false;
-  $('p-food').hidden=false;
+  $('p-food').hidden=true;
   $('p-wt').hidden=true;
+  $('p-coach').hidden=true;
+}
+function legacyState(){
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(!raw)return null;
+    var state=normalizeState(JSON.parse(raw));
+    return state.setupComplete||Object.keys(state.foods).length||state.weights.length||Object.keys(state.water).length?state:null;
+  }catch(error){
+    console.error('Unable to read existing browser tracker data:',error);
+    return null;
+  }
+}
+async function loadAccount(user,generation){
+  $('app-loading').hidden=false;
+  $('loading-message').textContent='Loading your tracker…';
+  $('retry-load').hidden=true;
+  hideTracker();
+  var result=await supabaseClient.from('tracker_data').select('data').eq('user_id',user.id).maybeSingle();
+  if(result.error)throw result.error;
+  if(generation!==accountGeneration)return;
+  if(result.data){
+    S=normalizeState(result.data.data);
+  }else{
+    var oldState=importLegacyOnFirstLogin?legacyState():null;
+    S=oldState||defaultState();
+    if(!await save())throw new Error('Could not create your tracker record in Supabase.');
+    if(oldState)message('sync-status','Imported this browser’s saved tracker into your account.',false);
+  }
+  if(generation!==accountGeneration)return;
+  loadedUserId=user.id;
+  loadingUserId=null;
+  $('app-loading').hidden=true;
+  $('auth').hidden=true;
+  $('account-bar').hidden=false;
+  $('account-email').textContent=user.email||'Signed in';
+  $('onb').hidden=S.setupComplete;
+  $('tabs').hidden=!S.setupComplete;
+  $('p-food').hidden=!S.setupComplete;
+  $('p-wt').hidden=true;
+  $('p-coach').hidden=true;
+  $('wdate').value=iso(new Date());
+  day=iso(new Date());
+  if(S.setupComplete)tab('food');
+  message('sync-status','Connected to your Supabase account.',false);
+  updateSuggestion();
+  renderFood();
+  renderWeight();
+}
+async function handleSession(session){
+  var user=session&&session.user?session.user:null;
+  if(!user){
+    accountGeneration++;
+    currentUser=null;
+    loadedUserId=null;
+    loadingUserId=null;
+    S=defaultState();
+    hideTracker();
+    $('auth').hidden=false;
+    $('account-bar').hidden=true;
+    $('app-loading').hidden=true;
+    message('sync-status','',false);
+    return;
+  }
+  if(currentUser&&currentUser.id===user.id&&(loadedUserId===user.id||loadingUserId===user.id))return;
+  accountGeneration++;
+  var generation=accountGeneration;
+  currentUser=user;
+  loadedUserId=null;
+  loadingUserId=user.id;
+  S=defaultState();
+  $('auth').hidden=true;
+  $('account-bar').hidden=false;
+  $('account-email').textContent=user.email||'Signed in';
+  $('app-loading').hidden=false;
+  $('loading-message').textContent='Loading your tracker…';
+  $('retry-load').hidden=true;
+  hideTracker();
+  try{
+    await loadAccount(user,generation);
+  }catch(error){
+    console.error('Unable to load tracker data from Supabase:',error);
+    if(generation!==accountGeneration)return;
+    loadingUserId=null;
+    $('app-loading').hidden=false;
+    $('loading-message').textContent='Could not load your tracker. Confirm the Supabase table and row security are set up, then retry. '+error.message;
+    $('retry-load').hidden=false;
+    message('sync-status','Your tracker data has not been loaded.',true);
+  }
+}
+async function authenticate(action){
+  if(!supabaseClient){
+    message('auth-status','Supabase is not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY, then restart the server.',true);
+    return;
+  }
+  if(!$('auth-form').reportValidity())return;
+  var email=$('auth-email').value.trim();
+  var password=$('auth-password').value;
+  $('sign-in').disabled=true;
+  $('sign-up').disabled=true;
+  message('auth-status',action==='signup'?'Creating your account…':'Signing in…',false);
+  importLegacyOnFirstLogin=$('import-legacy').checked;
+  try{
+    var result=action==='signup'
+      ?await supabaseClient.auth.signUp({email:email,password:password})
+      :await supabaseClient.auth.signInWithPassword({email:email,password:password});
+    if(result.error)throw result.error;
+    if(action==='signup'&&!result.data.session){
+      message('auth-status','Check your email to confirm your account, then return here to sign in.',false);
+    }else{
+      message('auth-status','Signed in. Loading your private tracker…',false);
+    }
+  }catch(error){
+    message('auth-status',error.message||'Could not authenticate. Check your email, password, and Supabase settings.',true);
+  }finally{
+    $('sign-in').disabled=false;
+    $('sign-up').disabled=false;
+  }
+}
+async function initializeAuth(){
+  $('auth-form').onsubmit=function(event){event.preventDefault();authenticate('signin')};
+  $('sign-in').onclick=function(){authenticate('signin')};
+  $('sign-up').onclick=function(){authenticate('signup')};
+  $('sign-out').onclick=async function(){
+    $('sign-out').disabled=true;
+    try{
+      var result=await supabaseClient.auth.signOut();
+      if(result.error)message('sync-status','Could not sign out: '+result.error.message,true);
+    }catch(error){
+      message('sync-status','Could not sign out: '+error.message,true);
+    }finally{
+      $('sign-out').disabled=false;
+    }
+  };
+  $('retry-load').onclick=function(){
+    if(currentUser)handleSession({user:currentUser});
+  };
+  try{
+    var response=await fetch('/api/config',{cache:'no-store'});
+    if(!response.ok)throw new Error('Could not load the app configuration.');
+    var config=await response.json();
+    if(!config.supabaseUrl||!config.supabaseAnonKey){
+      message('auth-status','Supabase is not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY, then restart the server.',true);
+      return;
+    }
+    if(!window.supabase||typeof window.supabase.createClient!=='function'){
+      throw new Error('Could not load the Supabase client library. Check your internet connection and refresh.');
+    }
+    supabaseClient=window.supabase.createClient(config.supabaseUrl,config.supabaseAnonKey);
+    supabaseClient.auth.onAuthStateChange(function(event,session){
+      if(['INITIAL_SESSION','SIGNED_IN','SIGNED_OUT','TOKEN_REFRESHED','USER_UPDATED'].indexOf(event)!==-1){
+        window.setTimeout(function(){handleSession(session)},0);
+      }
+    });
+    var result=await supabaseClient.auth.getSession();
+    if(result.error)throw result.error;
+    await handleSession(result.data.session);
+  }catch(error){
+    console.error('Unable to initialize Supabase authentication:',error);
+    message('auth-status',error.message||'Could not connect to Supabase.',true);
+  }
 }
 updateSuggestion();
-renderFood();renderWeight();
+initializeAuth();
 })();

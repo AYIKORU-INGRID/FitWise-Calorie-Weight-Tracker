@@ -11,6 +11,11 @@ h1{font-size:1.25rem;margin:4px 0 12px}
 .tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);font-weight:700}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+.account-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.account-bar span{min-width:0;overflow-wrap:anywhere;color:var(--mute);font-size:.85rem}
+.auth-import{flex-direction:row;align-items:flex-start;margin:10px 0}
+.auth-import input{width:auto;margin:5px 0 0}
+.account-bar .btn{flex:none}
 .datebar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .datebar button{border:1px solid var(--line);background:var(--surface);color:var(--ink);width:40px;height:40px;border-radius:50%;font-size:1.1rem;cursor:pointer}
 .datebar strong{font-size:1rem}

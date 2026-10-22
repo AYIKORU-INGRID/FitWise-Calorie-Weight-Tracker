@@ -2,11 +2,13 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const HOST = "127.0.0.1";
+const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 3000);
 const MAX_REQUEST_BYTES = 6 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 const API_KEY = process.env.OPENAI_API_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const STATIC_FILES = {
   "/": ["index.html", "text/html; charset=utf-8"],
   "/index.html": ["index.html", "text/html; charset=utf-8"],
@@ -21,6 +23,57 @@ function sendJson(response, status, body) {
     "X-Content-Type-Options": "nosniff"
   });
   response.end(JSON.stringify(body));
+}
+
+async function requireAuthenticatedUser(request) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    const error = new Error("Supabase is not configured on the server.");
+    error.status = 503;
+    throw error;
+  }
+  const authorization = request.headers.authorization;
+  if (typeof authorization !== "string" || !/^Bearer \S+$/.test(authorization)) {
+    const error = new Error("Sign in to use this feature.");
+    error.status = 401;
+    throw error;
+  }
+  let response;
+  try {
+    response = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/auth/v1/user`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: authorization
+      },
+      signal: AbortSignal.timeout(10000)
+    });
+  } catch {
+    const error = new Error("Could not verify your sign-in with Supabase. Try again.");
+    error.status = 502;
+    throw error;
+  }
+  if (response.status === 401 || response.status === 403) {
+    const error = new Error("Your sign-in has expired. Sign in again to continue.");
+    error.status = 401;
+    throw error;
+  }
+  if (!response.ok) {
+    const error = new Error("Could not verify your sign-in with Supabase. Try again.");
+    error.status = 502;
+    throw error;
+  }
+  let user;
+  try {
+    user = await response.json();
+  } catch {
+    const error = new Error("Supabase returned an invalid sign-in response.");
+    error.status = 502;
+    throw error;
+  }
+  if (!user || typeof user.id !== "string") {
+    const error = new Error("Supabase returned an invalid sign-in response.");
+    error.status = 502;
+    throw error;
+  }
 }
 
 async function readJson(request) {
@@ -306,12 +359,20 @@ async function chat(messages, context) {
 
 const server = http.createServer(async (request, response) => {
   const pathname = new URL(request.url, `http://${HOST}`).pathname;
+  if (request.method === "GET" && pathname === "/api/config") {
+    sendJson(response, 200, {
+      supabaseUrl: process.env.SUPABASE_URL || "",
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || ""
+    });
+    return;
+  }
   if (request.method === "POST" && pathname === "/api/chat") {
     if (!request.headers["content-type"]?.startsWith("application/json")) {
       sendJson(response, 415, { error: "Send chat messages as JSON." });
       return;
     }
     try {
+      await requireAuthenticatedUser(request);
       const body = await readJson(request);
       const messages = validateChatMessages(body && body.messages);
       const context = validateChatContext(body && body.context);
@@ -328,6 +389,7 @@ const server = http.createServer(async (request, response) => {
       return;
     }
     try {
+      await requireAuthenticatedUser(request);
       const body = await readJson(request);
       const image = parseImage(body && body.image);
       sendJson(response, 200, await scanImage(image));

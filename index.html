@@ -6,15 +6,38 @@
 <link rel="stylesheet" href="style.css"></head>
 <body><main>
 <h1>FitWise: Daily Weight & Calorie Tracker</h1>
+<section class="card" id="auth">
+  <h2>Sign in to your tracker</h2>
+  <p class="note">Create an account to keep your tracker data private and separate from other accounts.</p>
+  <form id="auth-form">
+    <label>Email<input id="auth-email" type="email" autocomplete="email" required></label>
+    <label>Password<input id="auth-password" type="password" autocomplete="current-password" minlength="8" required></label>
+    <label class="auth-import"><input id="import-legacy" type="checkbox"> Import this browser’s previous tracker data into this account if it has no saved data.</label>
+    <div class="row">
+      <button class="btn" id="sign-in" type="button">Sign in</button>
+      <button class="btn" id="sign-up" type="button">Create account</button>
+    </div>
+  </form>
+  <p id="auth-status" class="form-message" role="status" aria-live="polite"></p>
+</section>
+<div class="account-bar" id="account-bar" hidden>
+  <span id="account-email"></span>
+  <button class="btn" id="sign-out" type="button">Sign out</button>
+</div>
+<p id="sync-status" class="form-message" role="status" aria-live="polite"></p>
+<section class="card" id="app-loading" hidden aria-live="polite">
+  <p id="loading-message">Loading your tracker…</p>
+  <button class="btn" id="retry-load" type="button" hidden>Retry</button>
+</section>
 <div class="tabs" id="tabs" role="tablist" hidden>
   <button role="tab" id="t-food" aria-selected="true">Calories</button>
   <button role="tab" id="t-wt" aria-selected="false">Weight</button>
   <button role="tab" id="t-coach" aria-selected="false">Coach</button>
 </div>
-<section id="onb">
+<section id="onb" hidden>
   <form class="card" id="onboard-form">
     <h2>Welcome! Let’s set you up</h2>
-    <p class="note" style="margin:0 0 12px">Your entries are stored in this browser, not an account. The calorie target is a rough estimate, not medical advice.</p>
+    <p class="note" style="margin:0 0 12px">Your entries are saved to your private account. The calorie target is a rough estimate, not medical advice.</p>
     <div class="fgrid">
       <label>Age<input id="oage" type="number" inputmode="numeric" min="18" max="100" required></label>
       <label>Sex used for estimate<select id="osex"><option value="f">Female</option><option value="m">Male</option></select></label>
@@ -126,4 +149,5 @@
   </div>
 </section>
 </main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="App.js"></script></body></html>

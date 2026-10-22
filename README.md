@@ -1,5 +1,5 @@
-# WEIGHT-TRACKER
-A weight loss tracker and calorie tracker.
+# FitWise
+A weight and calorie tracker.
 
 ## Run
 

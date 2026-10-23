@@ -346,6 +346,7 @@ function renderWeight(){
     var W=320,H=170,pl=34,pr=10,pt=12,pb=24;
     var vals=w.map(function(x){return x.kg});if(S.goalWt)vals.push(S.goalWt);
     var lo=Math.floor(Math.min.apply(null,vals)-1),hi=Math.ceil(Math.max.apply(null,vals)+1);
+    if(hi===lo){lo-=1;hi+=1;}
     var t0=new Date(w[0].date).getTime(),t1=new Date(w[w.length-1].date).getTime();
     function X(d){return pl+(t1===t0?0:(new Date(d).getTime()-t0)/(t1-t0))*(W-pl-pr)}
     function Y(v){return pt+(hi-v)/(hi-lo)*(H-pt-pb)}

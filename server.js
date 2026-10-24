@@ -37,7 +37,7 @@ const STATIC_FILES = {
   "/privacy": ["privacy.html", "text/html; charset=utf-8"],
   "/privacy.html": ["privacy.html", "text/html; charset=utf-8"],
   "/terms": ["terms.html", "text/html; charset=utf-8"],
-  "/terms.html": ["terms.html", "text/html; charset=utf-8"]
+  "/terms.html": ["terms.html", "text/html; charset=utf-8"],
   "/logo.png": ["logo.png", "image/png"]
 };
 

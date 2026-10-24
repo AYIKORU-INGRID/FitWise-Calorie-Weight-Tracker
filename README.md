@@ -42,3 +42,6 @@ charges. Tracker data is stored in Supabase; the coach chat history remains
 only in the current browser page.
 
 Run `npm run check` to check the JavaScript syntax.
+## Going online
+
+See `DEPLOY.md` for hosting on Render, the Supabase address settings, and the privacy checklist. Fill in the placeholders in `privacy.html` and `terms.html` first.

@@ -102,7 +102,6 @@ async function requireAuthenticatedUser(request) {
   }
   return user;
 }
-}
 
 async function readJson(request) {
   const chunks = [];

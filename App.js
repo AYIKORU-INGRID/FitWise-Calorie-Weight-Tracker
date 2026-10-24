@@ -325,6 +325,9 @@ function tab(w){
   });
   if(w==='coach')renderInsights();
 }
+$('t-food').onclick=function(){tab('food')};
+$('t-wt').onclick=function(){tab('wt')};
+$('t-coach').onclick=function(){tab('coach')};
 
 function shift(n){var d=new Date(day+'T12:00:00');d.setDate(d.getDate()+n);day=iso(d);renderFood()}
 $('prev').onclick=function(){shift(-1)};$('next').onclick=function(){shift(1)};

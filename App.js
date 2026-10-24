@@ -344,6 +344,7 @@ function renderFood(){
   r.setAttribute('stroke-dashoffset',439.8*(1-Math.min(total/S.goal,1)));
   $('flist').innerHTML=items.length?items.map(function(it){return '<li><div class="nm">'+esc(it.name)+'<small>'+esc(it.meal)+'</small></div><b>'+it.kcal+'</b><button class="x" data-id="'+it.id+'" aria-label="Delete '+esc(it.name)+'">✕</button></li>'}).join(''):'<li class="empty">Nothing logged yet. Add your first meal above.</li>';
   renderWater();
+    refreshPlan(false);
 }
 var WATER_GOAL=8;
 var WATER_MAX=40;
@@ -501,6 +502,20 @@ function renderTip(){
   var el=$('tip'),t='';
   try{t=FitCoach.tipLine(S)}catch(err){}
   el.textContent=t;el.hidden=!t;
+}
+var planAt=0;
+async function refreshPlan(force){
+  var el=$('planinfo');
+  if(!el||!currentUser)return;
+  if(!force&&Date.now()-planAt<60000)return;
+  planAt=Date.now();
+  try{
+    var headers=await getAuthHeaders();
+    var res=await fetch('/api/plan',{headers:headers,cache:'no-store'});
+    if(!res.ok)throw new Error('plan');
+    var p=await res.json();
+    el.textContent=p.configured?((p.premium?'Premium: ':'Free plan: ')+p.left+' of '+p.limit+' photo scans left today.'):'';
+  }catch(err){el.textContent=''}
 }
 function renderInsights(){
   var box=$('insights');if(!box)return;
@@ -794,6 +809,7 @@ scanInput.onchange=function(){
   }).then(function(){
     scanPicker.setAttribute('aria-disabled','false');
     scanInput.disabled=false;
+    refreshPlan(true);
   });
 };
 

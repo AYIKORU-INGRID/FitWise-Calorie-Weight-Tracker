@@ -19,6 +19,15 @@ const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 const API_KEY = process.env.OPENAI_API_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+// Server-only secret. Never put this in App.js, index.html or any file the browser can load.
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const AI_PROVIDER = (process.env.AI_PROVIDER || (process.env.GEMINI_API_KEY ? "gemini" : "openai")).toLowerCase();
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
+const GEMINI_BASE = process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
+const FREE_SCANS_PER_DAY = intEnv("FREE_SCANS_PER_DAY", 2);
+const PREMIUM_SCANS_PER_DAY = intEnv("PREMIUM_SCANS_PER_DAY", 30);
+const ALLOW_UNLIMITED_SCANS = process.env.ALLOW_UNLIMITED_SCANS === "true";
 const STATIC_FILES = {
   "/": ["index.html", "text/html; charset=utf-8"],
   "/index.html": ["index.html", "text/html; charset=utf-8"],
@@ -86,6 +95,13 @@ async function requireAuthenticatedUser(request) {
     error.status = 502;
     throw error;
   }
+  if (!user || typeof user.id !== "string") {
+    const error = new Error("Supabase returned an invalid sign-in response.");
+    error.status = 502;
+    throw error;
+  }
+  return user;
+}
 }
 
 async function readJson(request) {
@@ -168,7 +184,156 @@ function validateAnalysis(value) {
   };
 }
 
+function intEnv(name, fallback) {
+  const value = Number.parseInt(process.env[name], 10);
+  return Number.isInteger(value) && value >= 0 ? value : fallback;
+}
+
+function aiConfigured() {
+  return AI_PROVIDER === "gemini" ? Boolean(GEMINI_API_KEY) : Boolean(API_KEY);
+}
+
+/* ---- plans and daily scan limits (Supabase, using the server-only service key) ---- */
+function adminFetch(restPath, options = {}) {
+  return fetch(`${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/${restPath}`, {
+    ...options,
+    headers: {
+      apikey: SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    },
+    signal: AbortSignal.timeout(10000)
+  });
+}
+
+function planError(cause) {
+  console.error("Plan check failed:", cause && cause.message);
+  const error = new Error("Could not check your plan. Please try again.");
+  error.status = 502;
+  return error;
+}
+
+async function getPlan(userId) {
+  if (!SUPABASE_SERVICE_KEY) {
+    return { configured: false, premium: false, premiumUntil: null, limit: FREE_SCANS_PER_DAY };
+  }
+  let rows;
+  try {
+    const res = await adminFetch(`subscriptions?user_id=eq.${encodeURIComponent(userId)}&select=premium_until`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    rows = await res.json();
+  } catch (cause) {
+    throw planError(cause);
+  }
+  const until = rows && rows[0] && rows[0].premium_until ? new Date(rows[0].premium_until) : null;
+  const premium = Boolean(until) && until.getTime() > Date.now();
+  return {
+    configured: true,
+    premium,
+    premiumUntil: premium ? until.toISOString() : null,
+    limit: premium ? PREMIUM_SCANS_PER_DAY : FREE_SCANS_PER_DAY
+  };
+}
+
+async function scansUsedToday(userId) {
+  const day = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Kampala" });
+  try {
+    const res = await adminFetch(`scan_usage?user_id=eq.${encodeURIComponent(userId)}&day=eq.${day}&select=count`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const rows = await res.json();
+    return rows && rows[0] ? Number(rows[0].count) || 0 : 0;
+  } catch (cause) {
+    throw planError(cause);
+  }
+}
+
+async function useScan(userId, limit) {
+  try {
+    const res = await adminFetch("rpc/use_scan", { method: "POST", body: JSON.stringify({ p_user: userId, p_limit: limit }) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) === true;
+  } catch (cause) {
+    throw planError(cause);
+  }
+}
+
+async function refundScan(userId) {
+  try {
+    await adminFetch("rpc/refund_scan", { method: "POST", body: JSON.stringify({ p_user: userId }) });
+  } catch (cause) {
+    console.error("Could not refund a scan:", cause.message);
+  }
+}
+
+/* ---- photo scan providers ---- */
+const SCAN_SYSTEM_PROMPT = "Estimate foods and portions visible in a meal photo for a personal food diary. Do not claim certainty. Return only a JSON object with this shape: {\"foods\":[{\"name\":\"food name\",\"portion\":\"estimated portion\",\"calories\":123}],\"notes\":\"short uncertainty note\"}. Give one entry per identifiable food, estimate calories for the visible portion, use integer calories from 1 to 5000, and return an empty foods array if no food is identifiable. Do not infer ingredients that are not visible. Foods may be East African dishes such as matooke, posho, rolex, beans, luwombo or katogo.";
+
 async function scanImage(image) {
+  return AI_PROVIDER === "gemini" ? scanImageGemini(image) : scanImageOpenAI(image);
+}
+
+async function scanImageGemini(image) {
+  if (!GEMINI_API_KEY) {
+    const error = new Error("Photo scanning is not configured. Set GEMINI_API_KEY in .env and restart the server.");
+    error.status = 503;
+    throw error;
+  }
+  const data = image.slice(image.indexOf(",") + 1);
+  let upstream;
+  try {
+    upstream = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+      signal: AbortSignal.timeout(60000),
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SCAN_SYSTEM_PROMPT }] },
+        contents: [{
+          role: "user",
+          parts: [
+            { text: "Identify the visible foods and estimate calories for the portions shown." },
+            { inlineData: { mimeType: "image/jpeg", data } }
+          ]
+        }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 800, responseMimeType: "application/json" }
+      })
+    });
+  } catch (cause) {
+    const failure = new Error(
+      cause.name === "TimeoutError"
+        ? "The AI scan timed out. Try again."
+        : "Could not reach the AI service. Check your internet connection and try again."
+    );
+    failure.status = cause.name === "TimeoutError" ? 504 : 502;
+    throw failure;
+  }
+  if (!upstream.ok) {
+    const detail = (await upstream.text().catch(() => "")).slice(0, 300);
+    console.error(`Gemini returned HTTP ${upstream.status}: ${detail}`);
+    const error = new Error(
+      upstream.status === 429
+        ? "The free AI quota is used up for now. Try again later, or search the food list."
+        : upstream.status === 400 || upstream.status === 401 || upstream.status === 403 || upstream.status === 404
+          ? "Google rejected the request. Check GEMINI_API_KEY and GEMINI_MODEL in .env."
+          : `The AI service could not analyze this photo (HTTP ${upstream.status}).`
+    );
+    error.status = upstream.status === 429 ? 503 : 502;
+    throw error;
+  }
+  try {
+    const completion = await upstream.json();
+    const parts = completion.candidates[0].content.parts;
+    const text = parts.map((part) => part.text || "").join("").replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, "");
+    return validateAnalysis(JSON.parse(text));
+  } catch (cause) {
+    if (cause.status) throw cause;
+    console.error("Invalid analysis response from Gemini:", cause.message);
+    const failure = new Error("The AI returned an unreadable result. Try another photo.");
+    failure.status = 502;
+    throw failure;
+  }
+}
+async function scanImageOpenAI(image) {
   if (!API_KEY) {
     const error = new Error("Photo scanning is not configured. Set OPENAI_API_KEY in the server terminal and restart it.");
     error.status = 503;
@@ -378,6 +543,25 @@ const server = http.createServer(async (request, response) => {
     });
     return;
   }
+  if (request.method === "GET" && pathname === "/api/plan") {
+    try {
+      const user = await requireAuthenticatedUser(request);
+      const plan = await getPlan(user.id);
+      const used = plan.configured ? await scansUsedToday(user.id) : 0;
+      sendJson(response, 200, {
+        configured: plan.configured && aiConfigured(),
+        premium: plan.premium,
+        premiumUntil: plan.premiumUntil,
+        limit: plan.limit,
+        used,
+        left: Math.max(plan.limit - used, 0)
+      });
+    } catch (error) {
+      if (error.status >= 500) console.error("Plan lookup failed:", error.message);
+      sendJson(response, error.status || 500, { error: error.message || "Plan lookup failed." });
+    }
+    return;
+  }
   if (request.method === "POST" && pathname === "/api/chat") {
     if (!request.headers["content-type"]?.startsWith("application/json")) {
       sendJson(response, 415, { error: "Send chat messages as JSON." });
@@ -401,10 +585,32 @@ const server = http.createServer(async (request, response) => {
       return;
     }
     try {
-      await requireAuthenticatedUser(request);
+            const user = await requireAuthenticatedUser(request);
       const body = await readJson(request);
       const image = parseImage(body && body.image);
-      sendJson(response, 200, await scanImage(image));
+      if (!aiConfigured()) {
+        const error = new Error("Photo scanning is not switched on for this app. You can search the food list instead.");
+        error.status = 503;
+        throw error;
+      }
+      const plan = await getPlan(user.id);
+      if (plan.configured) {
+        if (!(await useScan(user.id, plan.limit))) {
+          const error = new Error("You have used today’s photo scans. They reset at midnight (Kampala time). You can still search the food list.");
+          error.status = 429;
+          throw error;
+        }
+      } else if (!ALLOW_UNLIMITED_SCANS) {
+        const error = new Error("Photo scanning is off until scan limits are set up on the server.");
+        error.status = 503;
+        throw error;
+      }
+      try {
+        sendJson(response, 200, await scanImage(image));
+      } catch (scanError) {
+        if (plan.configured) await refundScan(user.id);
+        throw scanError;
+      }
     } catch (error) {
       if (error.status >= 500) console.error("Photo scan failed:", error.message);
       sendJson(response, error.status || 500, { error: error.message || "Photo scan failed." });
@@ -435,7 +641,9 @@ const server = http.createServer(async (request, response) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`Weight tracker ready at http://${HOST}:${PORT}`);
-  if (!API_KEY) {
-    console.warn("AI features are disabled. Set OPENAI_API_KEY and restart the server.");
+    if (!aiConfigured()) {
+    console.warn(`Photo scanning is off. Set ${AI_PROVIDER === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY"} in .env and restart the server.`);
+  } else if (!SUPABASE_SERVICE_KEY && !ALLOW_UNLIMITED_SCANS) {
+    console.warn("Photo scanning stays off until scan limits are set up. Add SUPABASE_SERVICE_ROLE_KEY to .env (see README).");
   }
 });

@@ -92,7 +92,8 @@
     <h2>Scan a meal</h2>
     <label class="btn scan-picker">📷 Take or choose a photo<input id="scan" type="file" accept="image/*" capture="environment" hidden></label>
     <div id="sres" class="scan-status" role="status" aria-live="polite"></div>
-    <p class="note">Photo scanning needs an AI service and may not be switched on. AI estimates can be wrong, so review them before adding. When it is on, the photo is sent to OpenAI for analysis and isn’t saved by this app. You can always search the food list below instead.</p>
+    <p class="note" id="planinfo"></p>
+    <p class="note">Photo scanning needs an AI service and may not be switched on. AI estimates can be wrong, so review them before adding. When it is on, the photo is sent to an AI provider (Google Gemini or OpenAI) for analysis and isn’t saved by this app. Free AI plans may use submitted content to improve their products, so avoid photos that show people or documents. You can always search the food list below instead.</p>
   </div>
   <div class="card">
     <h2>Add food</h2>

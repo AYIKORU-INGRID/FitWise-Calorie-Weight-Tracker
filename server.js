@@ -1,6 +1,16 @@
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
+// Load a local .env file (KEY=value per line) without overriding variables already set.
+try {
+  for (const line of fs.readFileSync(path.join(__dirname, ".env"), "utf8").split(/\r?\n/)) {
+    const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line);
+    if (!match || line.trim().startsWith("#")) continue;
+    let value = match[2];
+    if (/^(["']).*\1$/.test(value)) value = value.slice(1, -1);
+    if (process.env[match[1]] === undefined) process.env[match[1]] = value;
+  }
+} catch {}
 
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 3000);

@@ -795,7 +795,7 @@ scanInput.onchange=function(){
 };
 
 var chatHistory=[];
-var chatPrompts=[var chatPrompts=['How am I doing this week?','What should I eat next?','How can I build a balanced meal?','How does my calorie goal work?'];
+var chatPrompts=['How am I doing this week?','What should I eat next?','How can I build a balanced meal?','How does my calorie goal work?'];
 var chatInput=$('cin');
 var chatSend=$('csend');
 var chatMessages=$('msgs');

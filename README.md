@@ -42,6 +42,44 @@ charges. Tracker data is stored in Supabase; the coach chat history remains
 only in the current browser page.
 
 Run `npm run check` to check the JavaScript syntax.
+
+## Settings and Premium
+
+Signed-in users can save an appearance preference, weight units, and a daily
+water goal in the Settings tab. The settings are stored with the user's private
+tracker record; weight values continue to be stored in kilograms and are
+converted for display when pounds are selected.
+
+Premium photo scanning is an optional UGX 2,000 monthly Flutterwave
+subscription. To enable purchases:
+
+1. Create a monthly UGX 2,000 payment plan in Flutterwave. Flutterwave recurring
+   payment plans require card payments.
+2. In the Flutterwave dashboard, set the webhook URL to
+   `https://your-app.example/api/flutterwave/webhook` and configure a random
+   webhook secret hash.
+3. Set these server environment variables (never put these secrets in browser
+   code or commit them):
+
+   ```text
+   APP_URL=https://your-app.example
+   FLW_SECRET_KEY=your-flutterwave-secret-key
+   FLW_SECRET_HASH=the-webhook-secret-hash
+   FLW_PLAN_ID=your-flutterwave-plan-id
+   SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
+   ```
+
+4. Ensure photo scanning is enabled with an AI provider key, then restart the
+   server. Run the updated [`supabase/schema.sql`](./supabase/schema.sql) in the
+   Supabase SQL editor so server-side billing records and the subscription
+   activation function are available.
+
+Checkout stays disabled until the required configuration and photo-scanning
+service are available. The server verifies payments with Flutterwave before
+activating Premium, and signed webhooks handle renewals and cancellations.
+Test with Flutterwave test credentials and a test payment plan before accepting
+live payments.
+
 ## Going online
 
 See `DEPLOY.md` for hosting on Render, the Supabase address settings, and the privacy checklist. Fill in the placeholders in `privacy.html` and `terms.html` first.

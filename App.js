@@ -82,26 +82,27 @@ function tips(S){
   if(streak>=3)out.push({k:'good',t:streak+'-day logging streak. Keep it going.'});
 
   var wc=S.water[today]||0;
-  if(wc>=8)out.push({k:'good',t:'You reached 8 glasses of water today.'});
-  else if(wc<4&&h>=15)out.push({k:'info',t:'Only '+wc+' glass'+(wc===1?'':'es')+' of water so far today. Try a glass with your next meal.'});
+  if(wc>=S.preferences.waterGoal)out.push({k:'good',t:'You reached your '+S.preferences.waterGoal+'-glass water goal today.'});
+  else if(wc<Math.ceil(S.preferences.waterGoal/2)&&h>=15)out.push({k:'info',t:'Only '+wc+' glass'+(wc===1?'':'es')+' of water so far today. Try a glass with your next meal.'});
 
   var w=S.weights.slice().sort(function(a,b){return a.date<b.date?-1:1}).filter(function(x){return x.date>=addDays(today,-35)});
   if(w.length>=2){
     var a=w[0],b=w[w.length-1],span=(new Date(b.date)-new Date(a.date))/864e5;
     if(span>=6){
-      var rate=(b.kg-a.kg)/(span/7),abs=Math.abs(rate).toFixed(1),gw=S.goalWt;
+      var rate=(b.kg-a.kg)/(span/7),unit=S.preferences.weightUnit,scale=unit==='lb'?2.2046226218:1;
+      var abs=(Math.abs(rate)*scale).toFixed(1),gw=S.goalWt;
       var losing=gw!==null&&gw<b.kg-0.2,gaining=gw!==null&&gw>b.kg+0.2;
       if(losing){
-        if(rate<=-1)out.push({k:'warn',t:'You are losing about '+abs+' kg a week, which is faster than the usual 0.25 to 1 kg. Ease off if you can, and talk to a doctor or dietitian if you feel weak or dizzy.'});
+        if(rate<=-1)out.push({k:'warn',t:'You are losing about '+abs+' '+unit+' a week, which is faster than the usual '+(unit==='lb'?'0.6 to 2.2 lb':'0.25 to 1 kg')+'. Ease off if you can, and talk to a doctor or dietitian if you feel weak or dizzy.'});
         else if(rate<-0.15){
-          var wk=(b.kg-gw)/(-rate),t='You are losing about '+abs+' kg a week, a steady pace.';
-          if(wk<=104){var d=new Date();d.setDate(d.getDate()+Math.round(wk*7));t+=' If this continues you could reach '+gw+' kg around '+d.toLocaleDateString('en-GB',{day:'numeric',month:'long'})+'.'}
+          var wk=(b.kg-gw)/(-rate),t='You are losing about '+abs+' '+unit+' a week, a steady pace.';
+          if(wk<=104){var d=new Date();d.setDate(d.getDate()+Math.round(wk*7));t+=' If this continues you could reach '+(Math.round(gw*scale*10)/10)+' '+unit+' around '+d.toLocaleDateString('en-GB',{day:'numeric',month:'long'})+'.'}
           out.push({k:'good',t:t});
         }else if(rate<=0.15&&span>=14)out.push({k:'info',t:'Your weight has stayed about the same for '+Math.round(span/7)+' weeks. Daily weights bounce around, so check that your logging is complete, add a 20 to 30 minute walk, and give it two more weeks before changing your goal.'});
-        else if(rate>0.15)out.push({k:'info',t:'Your weight is up about '+abs+' kg a week. Check portion sizes of staples and sugary drinks, and make sure everything you eat is logged.'});
+        else if(rate>0.15)out.push({k:'info',t:'Your weight is up about '+abs+' '+unit+' a week. Check portion sizes of staples and sugary drinks, and make sure everything you eat is logged.'});
       }else if(gaining){
-        out.push(rate>0.05?{k:'good',t:'You are gaining about '+abs+' kg a week toward your goal.'}:{k:'info',t:'Your weight is not moving toward your goal yet. Add an extra portion of a staple plus a protein food each day.'});
-      }else if(Math.abs(rate)>0.5)out.push({k:'info',t:'Your weight is changing by about '+abs+' kg a week. If you want to hold steady, adjust your portions a little.'});
+        out.push(rate>0.05?{k:'good',t:'You are gaining about '+abs+' '+unit+' a week toward your goal.'}:{k:'info',t:'Your weight is not moving toward your goal yet. Add an extra portion of a staple plus a protein food each day.'});
+      }else if(Math.abs(rate)>0.5)out.push({k:'info',t:'Your weight is changing by about '+abs+' '+unit+' a week. If you want to hold steady, adjust your portions a little.'});
       else out.push({k:'good',t:'Your weight is steady.'});
     }
   }else out.push({k:'info',t:'Log your weight about once a week on the Weight tab to see your trend and goal date.'});
@@ -121,7 +122,7 @@ function reply(text,S){
   if(has(/diabet|pregnan|breastfeed|kidney|blood pressure|hypertens|ulcer|medicat|\bsick\b|faint|dizz|chest pain|cancer|hiv/))
     return 'I cannot give medical advice for health conditions. Please talk to a doctor or dietitian about what is right for you. I can still help with general things like meal ideas from the food list.';
   if(has(/lose.*fast|fast.*(weight|lose)|crash|fasting|detox|skip(ping)? meals|1 week|one week|quick(ly)?/))
-    return 'Fast weight loss usually backfires: you lose muscle and water, feel tired, and tend to regain it. A safe pace is about 0.25 to 1 kg a week. Small steps work better: smaller portions of staples, more water, more greens and beans, and a daily walk.';
+    return 'Fast weight loss usually backfires: you lose muscle and water, feel tired, and tend to regain it. A safe pace is about '+(S.preferences.weightUnit==='lb'?'0.6 to 2.2 lb':'0.25 to 1 kg')+' a week. Small steps work better: smaller portions of staples, more water, more greens and beans, and a daily walk.';
   if(has(/^\s*(hi|hello|hey|hallo|good (morning|afternoon|evening))\b/))
     return 'Hello! I can tell you how your week is going, suggest what to eat next, explain your calorie goal, or help you log food. What would you like?';
   if(has(/thank|thanks|cheers/))return 'You are welcome! I am here whenever you need me.';
@@ -156,7 +157,8 @@ return {all:F,sizes:SIZES,search:search,kcal:kcal,tips:tips,tipLine:tipLine,repl
 })();
 (function(){
 var KEY='daily-tracker-v1';
-function defaultState(){return {goal:2000,goalWt:null,foods:{},weights:[],water:{},setupComplete:false}}
+function defaultPreferences(){return {theme:'system',weightUnit:'kg',waterGoal:8}}
+function defaultState(){return {goal:2000,goalWt:null,foods:{},weights:[],water:{},preferences:defaultPreferences(),setupComplete:false}}
 function normalizeState(value){
   var state=defaultState();
   if(!value||typeof value!=='object'||Array.isArray(value))return state;
@@ -182,10 +184,42 @@ function normalizeState(value){
       if(Number.isInteger(count)&&count>=0&&count<=40)state.water[date]=count;
     });
   }
+  if(value.preferences&&typeof value.preferences==='object'&&!Array.isArray(value.preferences)){
+    if(['system','light','dark'].indexOf(value.preferences.theme)!==-1)state.preferences.theme=value.preferences.theme;
+    if(['kg','lb'].indexOf(value.preferences.weightUnit)!==-1)state.preferences.weightUnit=value.preferences.weightUnit;
+    if(Number.isInteger(value.preferences.waterGoal)&&value.preferences.waterGoal>=1&&value.preferences.waterGoal<=40)state.preferences.waterGoal=value.preferences.waterGoal;
+  }
   state.setupComplete=value.setupComplete===true;
   return state;
 }
 var S=defaultState();
+function weightUnit(){return S.preferences.weightUnit}
+function toDisplayWeight(kg){return Math.round((weightUnit()==='lb'?kg*2.2046226218:kg)*10)/10}
+function fromDisplayWeight(value){return weightUnit()==='lb'?value/2.2046226218:value}
+function formatWeight(kg){return toDisplayWeight(kg).toFixed(1)+' '+weightUnit()}
+function formatWeightChange(kg){
+  var value=toDisplayWeight(kg);
+  return (value>0?'+':'')+value.toFixed(1)+' '+weightUnit();
+}
+function applyTheme(){
+  if(S.preferences.theme==='system')document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme',S.preferences.theme);
+}
+function renderSettings(){
+  $('setting-theme').value=S.preferences.theme;
+  $('setting-units').value=S.preferences.weightUnit;
+  $('setting-water-goal').value=S.preferences.waterGoal;
+  applyTheme();
+  var isLb=weightUnit()==='lb';
+  $('weight-unit-label').textContent='Weight ('+weightUnit()+')';
+  $('goal-weight-unit-label').textContent='Goal weight ('+weightUnit()+')';
+  $('chart-unit').textContent=weightUnit();
+  $('wkg').min=isLb?'44.1':'20';
+  $('wkg').max=isLb?'881.8':'400';
+  $('wkg').placeholder=isLb?'e.g. 150.8':'e.g. 68.4';
+  $('swt').min=isLb?'44.1':'20';
+  $('swt').max=isLb?'881.8':'400';
+}
 var supabaseClient=null;
 var currentUser=null;
 var loadedUserId=null;
@@ -318,16 +352,48 @@ $('onboard-form').onsubmit=async function(e){
 };
 
 function tab(w){
- ['food','wt','coach'].forEach(function(name){
+ ['food','wt','coach','settings'].forEach(function(name){
     var selected=name===w;
     $('p-'+name).hidden=!selected;
     $('t-'+name).setAttribute('aria-selected',selected);
   });
   if(w==='coach')renderInsights();
+  if(w==='settings'){renderSettings();refreshPlan(true)}
 }
 $('t-food').onclick=function(){tab('food')};
 $('t-wt').onclick=function(){tab('wt')};
 $('t-coach').onclick=function(){tab('coach')};
+$('t-settings').onclick=function(){tab('settings')};
+$('settings-form').onsubmit=async function(event){
+  event.preventDefault();
+  var theme=$('setting-theme').value,unit=$('setting-units').value;
+  var waterGoal=Number($('setting-water-goal').value);
+  if(['system','light','dark'].indexOf(theme)===-1||['kg','lb'].indexOf(unit)===-1||
+     !Number.isInteger(waterGoal)||waterGoal<1||waterGoal>WATER_MAX){
+    message('settings-message','Choose a valid theme, weight unit, and water goal from 1 to 40 glasses.',true);
+    return;
+  }
+  var previous=S.preferences;
+  var pendingWeight=$('wkg').value;
+  S.preferences={theme:theme,weightUnit:unit,waterGoal:waterGoal};
+  if(!await save()){
+    S.preferences=previous;
+    renderSettings();
+    message('settings-message','Could not save your preferences. Check your connection and try again.',true);
+    return;
+  }
+  if(unit!==previous.weightUnit&&pendingWeight!==''){
+    var pendingValue=Number(pendingWeight);
+    if(isFinite(pendingValue)){
+      var pendingKg=previous.weightUnit==='lb'?pendingValue/2.2046226218:pendingValue;
+      $('wkg').value=(unit==='lb'?pendingKg*2.2046226218:pendingKg).toFixed(1);
+    }
+  }
+  renderSettings();
+  renderWater();
+  renderWeight();
+  message('settings-message','Preferences saved to your account.',false);
+};
 
 function shift(n){var d=new Date(day+'T12:00:00');d.setDate(d.getDate()+n);day=iso(d);renderFood()}
 $('prev').onclick=function(){shift(-1)};$('next').onclick=function(){shift(1)};
@@ -346,7 +412,6 @@ function renderFood(){
   renderWater();
     refreshPlan(false);
 }
-var WATER_GOAL=8;
 var WATER_MAX=40;
 function waterCount(date){
   var count=S.water[date];
@@ -356,12 +421,12 @@ function glassLabel(count){return count+' '+(count===1?'glass':'glasses')}
 function renderWater(){
   var count=waterCount(day);
   $('wcount').textContent=count;
-  $('wgoal').textContent='of '+WATER_GOAL+' glasses · '+(count*250)+' ml';
+  $('wgoal').textContent='of '+S.preferences.waterGoal+' glasses · '+(count*250)+' ml';
   $('wminus').disabled=count===0;
   $('wplus').disabled=count>=WATER_MAX||day>iso(new Date());
   $('cups').textContent='';
   $('cups').setAttribute('aria-label',count+' glasses logged for '+nice(day));
-  for(var i=0;i<WATER_GOAL;i++){
+  for(var i=0;i<S.preferences.waterGoal;i++){
     var cup=document.createElement('span');
     cup.className='cup'+(i<count?' filled':'');
     cup.setAttribute('aria-hidden','true');
@@ -377,7 +442,7 @@ function renderWater(){
     dates.push(iso(date));
   }
   var counts=dates.map(waterCount);
-  var maxCount=Math.max.apply(null,[WATER_GOAL].concat(counts));
+  var maxCount=Math.max.apply(null,[S.preferences.waterGoal].concat(counts));
   dates.forEach(function(date,index){
     var entry=document.createElement('div');
     entry.className='week-day';
@@ -515,8 +580,75 @@ async function refreshPlan(force){
     if(!res.ok)throw new Error('plan');
     var p=await res.json();
     el.textContent=p.configured?((p.premium?'Premium: ':'Free plan: ')+p.left+' of '+p.limit+' photo scans left today.'):'';
-  }catch(err){el.textContent=''}
+    var purchaseButton=$('subscribe');
+    if(p.premium){
+      $('subscription-status').textContent='Premium is active'+(p.premiumUntil?' until '+new Date(p.premiumUntil).toLocaleDateString():'')+
+        (p.subscriptionStatus==='cancelled'?'. It will not renew.':'.');
+      purchaseButton.textContent='Premium active';
+      purchaseButton.disabled=true;
+    }else{
+      $('subscription-status').textContent=p.purchaseConfigured?'No active Premium subscription.':'Purchases are not configured yet. Please contact the app administrator.';
+      purchaseButton.textContent='Subscribe with Flutterwave';
+      purchaseButton.disabled=!p.purchaseConfigured;
+    }
+  }catch(err){
+    el.textContent='Could not load scan-plan details. Try again shortly.';
+    $('subscription-status').textContent='Could not load subscription details. Try again shortly.';
+  }
 }
+async function verifyPurchaseReturn(){
+  var url=new URL(window.location.href);
+  var status=url.searchParams.get('status');
+  var txRef=url.searchParams.get('tx_ref');
+  var transactionId=url.searchParams.get('transaction_id');
+  if(!status&&!txRef&&!transactionId)return;
+  url.searchParams.delete('status');
+  url.searchParams.delete('tx_ref');
+  url.searchParams.delete('transaction_id');
+  window.history.replaceState({},'',url.pathname+url.search+url.hash);
+  if(status!=='successful'||!txRef||!transactionId){
+    message('purchase-message','Payment was not completed. You can try subscribing again.',true);
+    return;
+  }
+  var button=$('subscribe');
+  button.disabled=true;
+  message('purchase-message','Verifying your payment securely…',false);
+  try{
+    var headers=await getAuthHeaders();
+    headers['Content-Type']='application/json';
+    var response=await fetch('/api/purchase/verify',{
+      method:'POST',
+      headers:headers,
+      body:JSON.stringify({txRef:txRef,transactionId:transactionId})
+    });
+    var result=await response.json().catch(function(){throw new Error('The payment service returned an invalid response.')});
+    if(!response.ok)throw new Error(result.error||'Could not verify your payment.');
+    message('purchase-message','Payment verified. Premium photo scanning is active.',false);
+    planAt=0;
+    await refreshPlan(true);
+  }catch(error){
+    message('purchase-message',error.message||'Could not verify your payment. Contact support before trying again.',true);
+  }finally{
+    button.disabled=false;
+    await refreshPlan(true);
+  }
+}
+$('subscribe').onclick=async function(){
+  var button=$('subscribe');
+  button.disabled=true;
+  message('purchase-message','Opening secure Flutterwave checkout…',false);
+  try{
+    var headers=await getAuthHeaders();
+    headers['Content-Type']='application/json';
+    var response=await fetch('/api/purchase/checkout',{method:'POST',headers:headers,body:'{}'});
+    var result=await response.json().catch(function(){throw new Error('The payment service returned an invalid response.')});
+    if(!response.ok)throw new Error(result.error||'Could not start checkout.');
+    window.location.assign(result.checkoutUrl);
+  }catch(error){
+    message('purchase-message',error.message||'Could not start checkout. Please try again.',true);
+    button.disabled=false;
+  }
+};
 function renderInsights(){
   var box=$('insights');if(!box)return;
   var list=[];
@@ -536,32 +668,33 @@ $('flist').onclick=async function(e){
 
 function sorted(){return S.weights.slice().sort(function(a,b){return a.date<b.date?-1:1})}
 function renderWeight(){
+  renderSettings();
   var w=sorted();
   var last=w[w.length-1],first=w[0];
-  $('wlatest').textContent=last?last.kg.toFixed(1):'–';
-  $('wchange').textContent=(last&&first&&w.length>1)?((last.kg-first.kg>0?'+':'')+(last.kg-first.kg).toFixed(1)):'–';
-  $('wtogoal').textContent=(last&&S.goalWt)?Math.abs(last.kg-S.goalWt).toFixed(1):'–';
-  $('sgoal').value=S.goal;$('swt').value=S.goalWt||'';
+  $('wlatest').textContent=last?formatWeight(last.kg):'–';
+  $('wchange').textContent=(last&&first&&w.length>1)?formatWeightChange(last.kg-first.kg):'–';
+  $('wtogoal').textContent=(last&&S.goalWt)?formatWeight(Math.abs(last.kg-S.goalWt)):'–';
+  $('sgoal').value=S.goal;$('swt').value=S.goalWt===null?'':toDisplayWeight(S.goalWt);
   var c=$('chart');
   if(w.length<2){c.innerHTML='<div class="empty">Log at least two weights to see your trend.</div>'}
   else{
     var W=320,H=170,pl=34,pr=10,pt=12,pb=24;
-    var vals=w.map(function(x){return x.kg});if(S.goalWt)vals.push(S.goalWt);
+    var vals=w.map(function(x){return toDisplayWeight(x.kg)});if(S.goalWt)vals.push(toDisplayWeight(S.goalWt));
     var lo=Math.floor(Math.min.apply(null,vals)-1),hi=Math.ceil(Math.max.apply(null,vals)+1);
     if(hi===lo){lo-=1;hi+=1;}
     var t0=new Date(w[0].date).getTime(),t1=new Date(w[w.length-1].date).getTime();
     function X(d){return pl+(t1===t0?0:(new Date(d).getTime()-t0)/(t1-t0))*(W-pl-pr)}
     function Y(v){return pt+(hi-v)/(hi-lo)*(H-pt-pb)}
-    var pts=w.map(function(x){return X(x.date).toFixed(1)+','+Y(x.kg).toFixed(1)}).join(' ');
-    var s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Weight over time">';
+    var pts=w.map(function(x){return X(x.date).toFixed(1)+','+Y(toDisplayWeight(x.kg)).toFixed(1)}).join(' ');
+    var s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Weight over time in '+weightUnit()+'">';
     [lo,(lo+hi)/2,hi].forEach(function(v){s+='<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="var(--line)"/><text x="'+(pl-4)+'" y="'+(Y(v)+4)+'" text-anchor="end" font-size="10" fill="var(--mute)">'+(Math.round(v*10)/10)+'</text>'});
-    if(S.goalWt)s+='<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(S.goalWt)+'" y2="'+Y(S.goalWt)+'" stroke="var(--warn)" stroke-dasharray="4 4"/>';
+    if(S.goalWt)s+='<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(toDisplayWeight(S.goalWt))+'" y2="'+Y(toDisplayWeight(S.goalWt))+'" stroke="var(--warn)" stroke-dasharray="4 4"/>';
     s+='<polyline points="'+pts+'" fill="none" stroke="var(--pri)" stroke-width="2.5" stroke-linejoin="round"/>';
-    w.forEach(function(x){s+='<circle cx="'+X(x.date)+'" cy="'+Y(x.kg)+'" r="3.5" fill="var(--pri)"/>'});
+    w.forEach(function(x){s+='<circle cx="'+X(x.date)+'" cy="'+Y(toDisplayWeight(x.kg))+'" r="3.5" fill="var(--pri)"/>'});
     s+='<text x="'+pl+'" y="'+(H-6)+'" font-size="10" fill="var(--mute)">'+nice(w[0].date)+'</text><text x="'+(W-pr)+'" y="'+(H-6)+'" text-anchor="end" font-size="10" fill="var(--mute)">'+nice(w[w.length-1].date)+'</text></svg>';
     c.innerHTML=s;
   }
-  $('wlist').innerHTML=w.length?w.slice().reverse().map(function(x){return '<li><div class="nm">'+nice(x.date)+'</div><b>'+x.kg.toFixed(1)+' kg</b><button class="x" data-d="'+x.date+'" aria-label="Delete entry">✕</button></li>'}).join(''):'<li class="empty">No weights yet. Save your first one above.</li>';
+  $('wlist').innerHTML=w.length?w.slice().reverse().map(function(x){return '<li><div class="nm">'+nice(x.date)+'</div><b>'+formatWeight(x.kg)+'</b><button class="x" data-d="'+x.date+'" aria-label="Delete entry">✕</button></li>'}).join(''):'<li class="empty">No weights yet. Save your first one above.</li>';
 }
 $('wdate').value=iso(new Date());
 $('wdate').max=iso(new Date());
@@ -577,11 +710,12 @@ $('wdate').max=iso(new Date());
 });
 $('addwt').onclick=async function(){
   var weightInput=$('wkg'),dateInput=$('wdate');
-  var rawKg=weightInput.value,kg=Number(rawKg),d=dateInput.value;
+  var rawWeight=weightInput.value,displayWeight=Number(rawWeight),kg=fromDisplayWeight(displayWeight),d=dateInput.value;
   message('weight-message','',false);
   fieldError(weightInput,'');fieldError(dateInput,'');
-  if(rawKg===''||!isFinite(kg)||kg<20||kg>400||Math.abs(kg*10-Math.round(kg*10))>1e-8){
-    var weightError='Enter a weight from 20 to 400 kg, to one decimal place.';
+  if(rawWeight===''||!isFinite(displayWeight)||displayWeight<Number(weightInput.min)||displayWeight>Number(weightInput.max)||
+     kg<20||kg>400||Math.abs(displayWeight*10-Math.round(displayWeight*10))>1e-8){
+    var weightError='Enter a weight from '+weightInput.min+' to '+weightInput.max+' '+weightUnit()+', to one decimal place.';
     message('weight-message',weightError,true);fieldError(weightInput,weightError);weightInput.focus();return;
   }
   var parsedDate=/^\d{4}-\d{2}-\d{2}$/.test(d)?new Date(d+'T12:00:00'):new Date(NaN);
@@ -625,20 +759,21 @@ $('wlist').onclick=async function(e){
 $('savegoals').onclick=async function(){
   var calorieInput=$('sgoal'),weightInput=$('swt');
   var rawCalories=calorieInput.value,rawWeight=weightInput.value;
-  var calories=Number(rawCalories),goalWeight=rawWeight===''?null:Number(rawWeight);
+  var calories=Number(rawCalories),displayGoalWeight=rawWeight===''?null:Number(rawWeight);
+  var goalWeight=displayGoalWeight===null?null:fromDisplayWeight(displayGoalWeight);
   message('goals-message','',false);
   fieldError(calorieInput,'');fieldError(weightInput,'');
   if(rawCalories===''||!Number.isInteger(calories)||calories<800||calories>6000){
     var calorieError='Enter a whole daily calorie goal from 800 to 6000.';
     message('goals-message',calorieError,true);fieldError(calorieInput,calorieError);calorieInput.focus();return;
   }
-  if(goalWeight!==null&&(!isFinite(goalWeight)||goalWeight<20||goalWeight>400||
-     Math.abs(goalWeight*10-Math.round(goalWeight*10))>1e-8)){
-    var goalWeightError='Enter a goal weight from 20 to 400 kg, to one decimal place, or leave it blank.';
+  if(displayGoalWeight!==null&&(!isFinite(displayGoalWeight)||displayGoalWeight<Number(weightInput.min)||displayGoalWeight>Number(weightInput.max)||
+     goalWeight<20||goalWeight>400||Math.abs(displayGoalWeight*10-Math.round(displayGoalWeight*10))>1e-8)){
+    var goalWeightError='Enter a goal weight from '+weightInput.min+' to '+weightInput.max+' '+weightUnit()+', to one decimal place, or leave it blank.';
     message('goals-message',goalWeightError,true);fieldError(weightInput,goalWeightError);weightInput.focus();return;
   }
   var previousGoal=S.goal,previousGoalWeight=S.goalWt;
-  S.goal=calories;S.goalWt=goalWeight;
+  S.goal=calories;S.goalWt=goalWeight===null?null:Math.round(goalWeight*10)/10;
   if(!await save()){
     S.goal=previousGoal;S.goalWt=previousGoalWeight;
     message('goals-message','Could not save your goals to your account. Check your connection and try again.',true);
@@ -869,6 +1004,7 @@ function hideTracker(){
   $('p-food').hidden=true;
   $('p-wt').hidden=true;
   $('p-coach').hidden=true;
+  $('p-settings').hidden=true;
 }
 function legacyState(){
   try{
@@ -916,6 +1052,7 @@ async function loadAccount(user,generation){
   updateSuggestion();
   renderFood();
   renderWeight();
+  await verifyPurchaseReturn();
 }
 async function handleSession(session){
   var user=session&&session.user?session.user:null;
@@ -925,6 +1062,7 @@ async function handleSession(session){
     loadedUserId=null;
     loadingUserId=null;
     S=defaultState();
+    applyTheme();
     hideTracker();
     $('welcome').hidden=false;
     $('auth-title').hidden=true;
@@ -941,6 +1079,7 @@ async function handleSession(session){
   loadedUserId=null;
   loadingUserId=user.id;
   S=defaultState();
+  applyTheme();
   $('welcome').hidden=true;
   $('auth-title').hidden=true;
   $('auth').hidden=true;

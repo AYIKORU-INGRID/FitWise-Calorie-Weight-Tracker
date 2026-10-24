@@ -1,6 +1,7 @@
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 // Load a local .env file (KEY=value per line) without overriding variables already set.
 try {
   for (const line of fs.readFileSync(path.join(__dirname, ".env"), "utf8").split(/\r?\n/)) {
@@ -28,6 +29,10 @@ const GEMINI_BASE = process.env.GEMINI_BASE_URL || "https://generativelanguage.g
 const FREE_SCANS_PER_DAY = intEnv("FREE_SCANS_PER_DAY", 2);
 const PREMIUM_SCANS_PER_DAY = intEnv("PREMIUM_SCANS_PER_DAY", 30);
 const ALLOW_UNLIMITED_SCANS = process.env.ALLOW_UNLIMITED_SCANS === "true";
+const FLW_SECRET_KEY = process.env.FLW_SECRET_KEY;
+const FLW_SECRET_HASH = process.env.FLW_SECRET_HASH;
+const FLW_PLAN_ID = process.env.FLW_PLAN_ID;
+const APP_URL = process.env.APP_URL;
 const STATIC_FILES = {
   "/": ["index.html", "text/html; charset=utf-8"],
   "/index.html": ["index.html", "text/html; charset=utf-8"],
@@ -223,7 +228,7 @@ async function getPlan(userId) {
   }
   let rows;
   try {
-    const res = await adminFetch(`subscriptions?user_id=eq.${encodeURIComponent(userId)}&select=premium_until`);
+    const res = await adminFetch(`subscriptions?user_id=eq.${encodeURIComponent(userId)}&select=premium_until,subscription_status`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     rows = await res.json();
   } catch (cause) {
@@ -235,6 +240,7 @@ async function getPlan(userId) {
     configured: true,
     premium,
     premiumUntil: premium ? until.toISOString() : null,
+    subscriptionStatus: rows && rows[0] ? rows[0].subscription_status || "active" : null,
     limit: premium ? PREMIUM_SCANS_PER_DAY : FREE_SCANS_PER_DAY
   };
 }
@@ -267,6 +273,164 @@ async function refundScan(userId) {
   } catch (cause) {
     console.error("Could not refund a scan:", cause.message);
   }
+}
+
+function appOrigin() {
+  try {
+    const url = new URL(APP_URL);
+    if (url.username || url.password || url.search || url.hash) return null;
+    if (url.protocol !== "https:" && !(url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname))) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function purchaseConfigured() {
+  return Boolean(SUPABASE_SERVICE_KEY && FLW_SECRET_KEY && FLW_SECRET_HASH &&
+    /^\d+$/.test(FLW_PLAN_ID || "") && Number.isSafeInteger(Number(FLW_PLAN_ID)) &&
+    Number(FLW_PLAN_ID) > 0 && appOrigin());
+}
+
+function purchaseError(message, status = 502) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+function safeSecretEqual(value, expected) {
+  if (typeof value !== "string" || !expected) return false;
+  const received = Buffer.from(value);
+  const secret = Buffer.from(expected);
+  return received.length === secret.length && crypto.timingSafeEqual(received, secret);
+}
+
+async function flutterwaveRequest(pathname, options = {}) {
+  let response;
+  try {
+    response = await fetch(`https://api.flutterwave.com/v3/${pathname}`, {
+      ...options,
+      headers: {
+        Authorization: "Bearer " + FLW_SECRET_KEY,
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      },
+      signal: AbortSignal.timeout(15000)
+    });
+  } catch (cause) {
+    console.error("Flutterwave request failed:", cause.message);
+    throw purchaseError("Could not reach Flutterwave. Please try again.");
+  }
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw purchaseError("Flutterwave returned an invalid response.");
+  }
+  if (!response.ok || result.status !== "success") {
+    console.error("Flutterwave API error:", response.status, result.message || "unknown error");
+    throw purchaseError("Flutterwave could not process the request. Please try again.");
+  }
+  return result.data;
+}
+
+async function getCheckout(txRef) {
+  const response = await adminFetch(`flutterwave_checkouts?tx_ref=eq.${encodeURIComponent(txRef)}&select=tx_ref,user_id,email,amount,currency,plan_id,status`);
+  if (!response.ok) throw purchaseError("Could not load the payment record.");
+  const rows = await response.json();
+  return Array.isArray(rows) ? rows[0] || null : null;
+}
+
+async function getPendingCheckout(userId) {
+  const response = await adminFetch(`flutterwave_checkouts?user_id=eq.${encodeURIComponent(userId)}&status=eq.pending&select=tx_ref,checkout_url&order=created_at.desc&limit=1`);
+  if (!response.ok) throw purchaseError("Could not check your pending payment.");
+  const rows = await response.json();
+  return Array.isArray(rows) ? rows[0] || null : null;
+}
+
+async function markCheckoutFailed(txRef) {
+  const response = await adminFetch(`flutterwave_checkouts?tx_ref=eq.${encodeURIComponent(txRef)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ status: "failed" })
+  });
+  if (!response.ok) console.error("Could not mark Flutterwave checkout as failed:", txRef);
+}
+
+async function recordPremiumPayment(checkout, transactionId, tx) {
+  const paidEmail = tx.customer && typeof tx.customer.email === "string" ? tx.customer.email.toLowerCase() : "";
+  if (tx.status !== "successful" || tx.tx_ref !== checkout.tx_ref ||
+      tx.currency !== "UGX" || !Number.isFinite(Number(tx.amount)) || Number(tx.amount) < 2000 ||
+      (paidEmail && paidEmail !== checkout.email.toLowerCase()) ||
+      (tx.payment_plan && String(tx.payment_plan) !== String(FLW_PLAN_ID))) {
+    throw purchaseError("The payment details did not match this subscription.", 400);
+  }
+  const response = await adminFetch("rpc/activate_flutterwave_payment", {
+    method: "POST",
+    body: JSON.stringify({
+      p_transaction_id: String(transactionId),
+      p_tx_ref: checkout.tx_ref,
+      p_user_id: checkout.user_id,
+      p_email: checkout.email.toLowerCase(),
+      p_plan_id: String(FLW_PLAN_ID),
+      p_amount: Number(tx.amount),
+      p_currency: tx.currency
+    })
+  });
+  if (!response.ok) throw purchaseError("Could not activate Premium. Please contact support.");
+  const update = await adminFetch(`flutterwave_checkouts?tx_ref=eq.${encodeURIComponent(checkout.tx_ref)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ status: "paid", transaction_id: String(transactionId) })
+  });
+  if (!update.ok) throw purchaseError("Payment was received, but its status could not be saved. Please contact support.");
+}
+
+async function verifyFlutterwaveTransaction(transactionId) {
+  return flutterwaveRequest(`transactions/${encodeURIComponent(transactionId)}/verify`);
+}
+
+async function processFlutterwaveWebhook(payload) {
+  const data = payload && payload.data;
+  if (!data) return;
+  if (payload.event === "subscription.cancelled") {
+    const email = data.customer && data.customer.email;
+    const planId = data.plan && data.plan.id;
+    if (!email || String(planId) !== String(FLW_PLAN_ID)) return;
+    const response = await adminFetch(`subscriptions?email=eq.${encodeURIComponent(email.toLowerCase())}&provider_plan_id=eq.${encodeURIComponent(String(FLW_PLAN_ID))}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ subscription_status: "cancelled", updated_at: new Date().toISOString() })
+    });
+    if (!response.ok) throw purchaseError("Could not save the subscription cancellation.");
+    return;
+  }
+  if (payload.event !== "charge.completed" || data.status !== "successful" ||
+      (typeof data.id !== "string" && typeof data.id !== "number") || !/^\d{1,20}$/.test(String(data.id))) return;
+  const tx = await verifyFlutterwaveTransaction(data.id);
+  const txRef = typeof tx.tx_ref === "string" ? tx.tx_ref : "";
+  const checkout = txRef ? await getCheckout(txRef) : null;
+  if (checkout) {
+    await recordPremiumPayment(checkout, data.id, tx);
+    return;
+  }
+  const planId = tx.payment_plan || tx.plan_id || (tx.meta && tx.meta.payment_plan);
+  const email = tx.customer && typeof tx.customer.email === "string" ? tx.customer.email.toLowerCase() : "";
+  if (!email || String(planId) !== String(FLW_PLAN_ID) || tx.status !== "successful" ||
+      tx.currency !== "UGX" || !Number.isFinite(Number(tx.amount)) || Number(tx.amount) < 2000) {
+    console.warn("Ignoring Flutterwave renewal without matching verified subscription details:", data.id);
+    return;
+  }
+  const response = await adminFetch(`subscriptions?email=eq.${encodeURIComponent(email)}&provider_plan_id=eq.${encodeURIComponent(String(FLW_PLAN_ID))}&select=user_id,email`);
+  if (!response.ok) throw purchaseError("Could not find the subscription for a renewal.");
+  const rows = await response.json();
+  const subscription = Array.isArray(rows) ? rows[0] : null;
+  if (!subscription) return;
+  await recordPremiumPayment({
+    tx_ref: txRef,
+    user_id: subscription.user_id,
+    email: subscription.email
+  }, data.id, tx);
 }
 
 /* ---- photo scan providers ---- */
@@ -550,6 +714,148 @@ const server = http.createServer(async (request, response) => {
     });
     return;
   }
+  if (request.method === "POST" && pathname === "/api/purchase/checkout") {
+    if (!request.headers["content-type"]?.startsWith("application/json")) {
+      sendJson(response, 415, { error: "Send checkout requests as JSON." });
+      return;
+    }
+    try {
+      if (!purchaseConfigured()) throw purchaseError("Purchases are not configured on this server.", 503);
+      if (!aiConfigured()) throw purchaseError("Photo scanning is not enabled on this server yet.", 503);
+      const user = await requireAuthenticatedUser(request);
+      if (!user.email) throw purchaseError("Your account needs an email address to subscribe.", 400);
+      const plan = await getPlan(user.id);
+      if (plan.premium) throw purchaseError("Your Premium subscription is already active.", 409);
+      const expiredAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      const expireOldCheckouts = await adminFetch(`flutterwave_checkouts?user_id=eq.${encodeURIComponent(user.id)}&status=eq.pending&created_at=lt.${encodeURIComponent(expiredAt)}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ status: "failed" })
+      });
+      if (!expireOldCheckouts.ok) throw purchaseError("Could not expire an old checkout attempt.");
+      const pendingCheckout = await getPendingCheckout(user.id);
+      if (pendingCheckout) {
+        if (pendingCheckout.checkout_url) {
+          sendJson(response, 200, { checkoutUrl: pendingCheckout.checkout_url });
+          return;
+        }
+        throw purchaseError("A checkout is already being prepared. Please try again shortly.", 409);
+      }
+      const txRef = `fitwise-${crypto.randomUUID()}`;
+      const checkoutInsert = await adminFetch("flutterwave_checkouts", {
+        method: "POST",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({
+          tx_ref: txRef,
+          user_id: user.id,
+          email: user.email.toLowerCase(),
+          amount: 2000,
+          currency: "UGX",
+          plan_id: String(FLW_PLAN_ID),
+          status: "pending"
+        })
+      });
+      if (!checkoutInsert.ok) {
+        console.error("Could not create Flutterwave checkout record:", checkoutInsert.status);
+        const pending = await getPendingCheckout(user.id);
+        if (pending && pending.checkout_url) {
+          sendJson(response, 200, { checkoutUrl: pending.checkout_url });
+          return;
+        }
+        if (pending) throw purchaseError("A checkout is already being prepared. Please try again shortly.", 409);
+        throw purchaseError("Could not prepare your subscription. Please try again.");
+      }
+      let checkout;
+      try {
+        checkout = await flutterwaveRequest("payments", {
+          method: "POST",
+          body: JSON.stringify({
+            tx_ref: txRef,
+            amount: 2000,
+            currency: "UGX",
+            payment_plan: Number(FLW_PLAN_ID),
+            payment_options: "card",
+            session_duration: 60,
+            redirect_url: `${appOrigin()}/`,
+            customer: { email: user.email, name: user.user_metadata && user.user_metadata.full_name || user.email },
+            customizations: {
+              title: "FitWise Premium",
+              description: "Monthly photo-scanning subscription"
+            },
+            meta: { tx_ref: txRef, user_id: user.id }
+          })
+        });
+      } catch (error) {
+        await markCheckoutFailed(txRef);
+        throw error;
+      }
+      let checkoutUrl;
+      try {
+        checkoutUrl = new URL(checkout.link);
+      } catch {
+        await markCheckoutFailed(txRef);
+        throw purchaseError("Flutterwave returned an invalid checkout URL.");
+      }
+      if (checkoutUrl.protocol !== "https:" || checkoutUrl.hostname !== "checkout.flutterwave.com") {
+        await markCheckoutFailed(txRef);
+        throw purchaseError("Flutterwave returned an invalid checkout URL.");
+      }
+      const savedCheckout = await adminFetch(`flutterwave_checkouts?tx_ref=eq.${encodeURIComponent(txRef)}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ checkout_url: checkoutUrl.toString() })
+      });
+      if (!savedCheckout.ok) console.error("Could not save Flutterwave checkout URL for:", txRef);
+      sendJson(response, 200, { checkoutUrl: checkoutUrl.toString() });
+    } catch (error) {
+      if (error.status >= 500) console.error("Premium checkout failed:", error.message);
+      sendJson(response, error.status || 500, { error: error.message || "Could not start checkout." });
+    }
+    return;
+  }
+  if (request.method === "POST" && pathname === "/api/purchase/verify") {
+    if (!request.headers["content-type"]?.startsWith("application/json")) {
+      sendJson(response, 415, { error: "Send payment verification requests as JSON." });
+      return;
+    }
+    try {
+      if (!purchaseConfigured()) throw purchaseError("Purchases are not configured on this server.", 503);
+      const user = await requireAuthenticatedUser(request);
+      const body = await readJson(request);
+      const txRef = body && body.txRef;
+      const transactionId = body && body.transactionId;
+      if (typeof txRef !== "string" || !/^fitwise-[0-9a-f-]{36}$/.test(txRef) ||
+          (typeof transactionId !== "string" && typeof transactionId !== "number") ||
+          !/^\d{1,20}$/.test(String(transactionId))) {
+        throw purchaseError("Invalid payment reference.", 400);
+      }
+      const checkout = await getCheckout(txRef);
+      if (!checkout) throw purchaseError("Could not find this payment attempt.", 404);
+      if (checkout.user_id !== user.id) throw purchaseError("This payment belongs to another account.", 403);
+      const tx = await verifyFlutterwaveTransaction(transactionId);
+      await recordPremiumPayment(checkout, transactionId, tx);
+      sendJson(response, 200, { premium: true });
+    } catch (error) {
+      if (error.status >= 500) console.error("Premium payment verification failed:", error.message);
+      sendJson(response, error.status || 500, { error: error.message || "Could not verify payment." });
+    }
+    return;
+  }
+  if (request.method === "POST" && pathname === "/api/flutterwave/webhook") {
+    if (!FLW_SECRET_HASH || !safeSecretEqual(request.headers["verif-hash"], FLW_SECRET_HASH)) {
+      sendJson(response, 401, { error: "Invalid webhook signature." });
+      return;
+    }
+    try {
+      const payload = await readJson(request);
+      await processFlutterwaveWebhook(payload);
+      sendJson(response, 200, { received: true });
+    } catch (error) {
+      console.error("Flutterwave webhook processing failed:", error.message);
+      sendJson(response, error.status && error.status < 500 ? error.status : 500, { error: "Webhook could not be processed." });
+    }
+    return;
+  }
   if (request.method === "GET" && pathname === "/api/plan") {
     try {
       const user = await requireAuthenticatedUser(request);
@@ -559,6 +865,8 @@ const server = http.createServer(async (request, response) => {
         configured: plan.configured && aiConfigured(),
         premium: plan.premium,
         premiumUntil: plan.premiumUntil,
+        subscriptionStatus: plan.subscriptionStatus,
+        purchaseConfigured: purchaseConfigured() && aiConfigured(),
         limit: plan.limit,
         used,
         left: Math.max(plan.limit - used, 0)

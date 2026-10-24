@@ -43,6 +43,7 @@
   <button role="tab" id="t-food" aria-selected="true">Calories</button>
   <button role="tab" id="t-wt" aria-selected="false">Weight</button>
   <button role="tab" id="t-coach" aria-selected="false">Coach</button>
+  <button role="tab" id="t-settings" aria-selected="false">Settings</button>
 </div>
 <section id="onb" hidden>
   <form class="card" id="onboard-form">
@@ -127,7 +128,7 @@
 <section id="p-wt" hidden>
   <div class="card">
     <div class="row" style="align-items:flex-end">
-      <label>Weight (kg)<input id="wkg" type="number" inputmode="decimal" step="0.1" min="20" max="400" aria-describedby="weight-message" placeholder="e.g. 68.4"></label>
+      <label><span id="weight-unit-label">Weight (kg)</span><input id="wkg" type="number" inputmode="decimal" step="0.1" min="20" max="400" aria-describedby="weight-message" placeholder="e.g. 68.4"></label>
       <label>Date<input id="wdate" type="date" aria-describedby="weight-message"></label>
       <button class="btn" id="addwt" type="button">Save weight</button>
     </div>
@@ -140,12 +141,12 @@
       <div><span>To goal</span><div class="big" id="wtogoal">–</div></div>
     </div>
   </div>
-  <div class="card"><h2>Trend</h2><div class="chart" id="chart"></div></div>
+  <div class="card"><h2>Trend (<span id="chart-unit">kg</span>)</h2><div class="chart" id="chart"></div></div>
   <div class="card">
     <h2>Goals</h2>
     <div class="row" style="align-items:flex-end">
       <label>Daily calories (kcal)<input id="sgoal" type="number" inputmode="numeric" min="800" max="6000" aria-describedby="goals-message"></label>
-      <label>Goal weight (kg)<input id="swt" type="number" inputmode="decimal" step="0.1" min="20" max="400" aria-describedby="goals-message"></label>
+      <label><span id="goal-weight-unit-label">Goal weight (kg)</span><input id="swt" type="number" inputmode="decimal" step="0.1" min="20" max="400" aria-describedby="goals-message"></label>
       <button class="btn" id="savegoals" type="button">Save goals</button>
     </div>
     <p class="form-message" id="goals-message" role="status" aria-live="polite"></p>
@@ -161,6 +162,40 @@
     <div class="row"><input class="grow" id="cin" aria-label="Message to your coach" placeholder="Ask me anything…" maxlength="300"><button class="btn" id="csend" type="button">Send</button></div>
     <div class="chips" id="cchips"></div>
     <p class="note">The coach works from your own data inside the app, with no AI service. It gives general wellness guidance, not medical advice.</p>
+  </div>
+</section>
+<section id="p-settings" hidden>
+  <div class="card">
+    <h2>Preferences</h2>
+    <p class="note">Personalize how FitWise looks and displays your tracker. These settings sync to your private account.</p>
+    <form id="settings-form">
+      <label>Appearance
+        <select id="setting-theme">
+          <option value="system">Use device setting</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+      <label>Weight units
+        <select id="setting-units">
+          <option value="kg">Kilograms (kg)</option>
+          <option value="lb">Pounds (lb)</option>
+        </select>
+      </label>
+      <label>Daily water goal (glasses)
+        <input id="setting-water-goal" type="number" inputmode="numeric" min="1" max="40" step="1" required>
+      </label>
+      <button class="btn" id="save-settings" type="submit">Save preferences</button>
+    </form>
+    <p class="form-message" id="settings-message" role="status" aria-live="polite"></p>
+  </div>
+  <div class="card">
+    <h2>FitWise Premium</h2>
+    <p>Photo scanning · UGX 2,000 per month</p>
+    <p class="note">Recurring subscriptions are processed by Flutterwave and require a card. You can cancel through the subscription link in Flutterwave’s billing emails.</p>
+    <p class="form-message" id="subscription-status" role="status" aria-live="polite"></p>
+    <button class="btn" id="subscribe" type="button">Subscribe with Flutterwave</button>
+    <p class="form-message" id="purchase-message" role="status" aria-live="polite"></p>
   </div>
 </section>
 </main>

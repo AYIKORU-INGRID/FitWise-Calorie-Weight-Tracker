@@ -33,6 +33,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .seg{display:flex;gap:6px}
 .seg button{flex:1;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;padding:8px 6px;border-radius:10px;cursor:pointer}
 .seg button[aria-pressed="true"]{border-color:var(--pri);background:var(--pri);color:var(--on)}
+#settings-form{display:grid;gap:12px}
 .err{color:var(--warn);font-size:.85rem;margin:8px 0}
 .form-message{min-height:0;font-size:.85rem;margin:8px 0 0}
 .form-message:empty{display:none}

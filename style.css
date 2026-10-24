@@ -6,6 +6,8 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
 main{max-width:520px;margin:0 auto;padding:16px 16px 40px}
 h1{font-size:1.25rem;margin:4px 0 12px}
+.welcome{text-align:center;padding:28px 16px}
+.welcome-logo{display:block;width:min(100%,320px);height:auto;margin:0 auto 20px}
 .tabs{display:flex;gap:6px;background:var(--track);padding:4px;border-radius:12px;margin-bottom:16px}
 .tabs button{flex:1;border:0;background:none;color:var(--mute);font:inherit;font-weight:500;padding:10px;border-radius:9px;cursor:pointer}
 .tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);font-weight:700}

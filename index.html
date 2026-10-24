@@ -1,12 +1,16 @@
-l<!doctype html>
+<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>FitWise: Daily Weight & Calorie Tracker</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css"></head>
 <body><main>
-<h1>FitWise: Daily Weight & Calorie Tracker</h1>
-<section class="card" id="auth">
+<section class="welcome card" id="welcome">
+  <img class="welcome-logo" src="/logo.png" alt="FitWise — Your health, your confidence">
+  <button class="btn" id="get-started" type="button">Get started</button>
+</section>
+<h1 id="auth-title" hidden>FitWise: Daily Weight & Calorie Tracker</h1>
+<section class="card" id="auth" hidden>
   <h2>Sign in to your tracker</h2>
   <p class="note">Create an account to keep your tracker data private and separate from other accounts.</p>
   <form id="auth-form">

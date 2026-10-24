@@ -24,7 +24,8 @@ const STATIC_FILES = {
   "/index.html": ["index.html", "text/html; charset=utf-8"],
   "/App.js": ["App.js", "text/javascript; charset=utf-8"],
   "/app.js": ["App.js", "text/javascript; charset=utf-8"],
-  "/style.css": ["style.css", "text/css; charset=utf-8"]
+  "/style.css": ["style.css", "text/css; charset=utf-8"],
+  "/logo.png": ["logo.png", "image/png"]
 };
 
 function sendJson(response, status, body) {

@@ -910,7 +910,9 @@ async function handleSession(session){
     loadingUserId=null;
     S=defaultState();
     hideTracker();
-    $('auth').hidden=false;
+    $('welcome').hidden=false;
+    $('auth-title').hidden=true;
+    $('auth').hidden=true;
     $('account-bar').hidden=true;
     $('app-loading').hidden=true;
     message('sync-status','',false);
@@ -923,6 +925,8 @@ async function handleSession(session){
   loadedUserId=null;
   loadingUserId=user.id;
   S=defaultState();
+  $('welcome').hidden=true;
+  $('auth-title').hidden=true;
   $('auth').hidden=true;
   $('account-bar').hidden=false;
   $('account-email').textContent=user.email||'Signed in';
@@ -972,6 +976,12 @@ async function authenticate(action){
   }
 }
 async function initializeAuth(){
+  $('get-started').onclick=function(){
+    $('welcome').hidden=true;
+    $('auth-title').hidden=false;
+    $('auth').hidden=false;
+    $('auth-email').focus();
+  };
   $('toggle-password').onclick=function(){
     var password=$('auth-password');
     var isVisible=password.type==='password';

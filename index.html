@@ -1,4 +1,4 @@
-<!doctype html>
+l<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>FitWise: Daily Weight & Calorie Tracker</title>
@@ -83,11 +83,12 @@
     </div>
     <div class="stats"><div><b id="eaten">0</b>eaten</div><div><b id="goal">2000</b>daily goal</div></div>
   </div>
+       <p class="tip" id="tip" hidden></p>
   <div class="card">
     <h2>Scan a meal</h2>
     <label class="btn scan-picker">📷 Take or choose a photo<input id="scan" type="file" accept="image/*" capture="environment" hidden></label>
     <div id="sres" class="scan-status" role="status" aria-live="polite"></div>
-    <p class="note">AI estimates can be wrong. Review them before adding. When scanning is configured, the selected photo is sent to OpenAI for analysis and isn’t saved by this app.</p>
+    <p class="note">Photo scanning needs an AI service and may not be switched on. AI estimates can be wrong, so review them before adding. When it is on, the photo is sent to OpenAI for analysis and isn’t saved by this app. You can always search the food list below instead.</p>
   </div>
   <div class="card">
     <h2>Add food</h2>
@@ -98,8 +99,10 @@
       <button class="btn" id="addfood" type="button">Add</button>
     </div>
     <p class="form-message" id="food-message" role="status" aria-live="polite"></p>
+        <input id="fsearch" type="search" placeholder="Search foods: matooke, rolex, luwombo…" aria-label="Search the Ugandan food list" autocomplete="off">
+    <div class="fresults" id="fresults"></div>
     <div class="chips" id="chips"></div>
-    <p class="note">Quick-add values are rough estimates for a typical serving. Change them to match your plate.</p>
+    <p class="note">Calories for the food list and quick-add buttons are rough estimates for typical servings. Real values change with the recipe, oil and portion size.</p>
   </div>
   <div class="card"><h2>Today’s log</h2><ul id="flist"></ul></div>
   <div class="card">
@@ -145,12 +148,13 @@
   <div class="card"><h2>History</h2><ul id="wlist"></ul></div>
 </section>
 <section id="p-coach" hidden>
+  <div class="card"><h2>Your insights</h2><div id="insights" aria-live="polite"></div></div>
   <div class="card">
     <h2>Your coach</h2>
-    <div id="msgs" class="messages" role="log" aria-live="polite" aria-label="Chat messages"><div class="msg bot">Hi! I’m your coach. Ask me how to use the app, how your calorie goal works, or for meal ideas.</div></div>
+    <div id="msgs" class="messages" role="log" aria-live="polite" aria-label="Chat messages"><div class="msg bot">Hi! I’m your coach. Ask how your week is going, what to eat next, or how your calorie goal works.</div></div>
     <div class="row"><input class="grow" id="cin" aria-label="Message to your coach" placeholder="Ask me anything…" maxlength="300"><button class="btn" id="csend" type="button">Send</button></div>
     <div class="chips" id="cchips"></div>
-    <p class="note">The coach gives general wellness guidance, not medical advice. Don’t share sensitive personal information.</p>
+    <p class="note">The coach works from your own data inside the app, with no AI service. It gives general wellness guidance, not medical advice.</p>
   </div>
 </section>
 </main>

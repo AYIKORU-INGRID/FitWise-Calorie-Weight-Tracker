@@ -1,3 +1,159 @@
+/* FitCoach: free on-device coach and Ugandan food list. No AI service, no API key, nothing leaves the device. */
+var FitCoach=(function(){
+'use strict';
+var F=[
+['Matooke (steamed)','1 plate',330],['Posho (ugali)','1 plate',350],['Millet bread (kalo)','1 serving',280],
+['Cassava, boiled','1 portion',230],['Sweet potato, boiled','1 medium',170],['Irish potato, boiled','1 medium',175],
+['Rice, cooked','1 cup',205],['Chapati','1 piece',250],['Rolex (egg chapati roll)','1 roll',550],
+['Katogo (matooke & beans)','1 plate',550],['Pilau','1 plate',500],['Chips','1 portion',450],
+['Beans, stewed','1 cup',250,1],['Groundnut sauce','½ cup',250,1],['Beef stew','1 serving',250,1],
+['Goat meat stew','1 serving',200,1],['Chicken stew','1 piece',250,1],['Fried chicken','1 piece',250,1],
+['Fish stew','1 piece',200,1],['Fried tilapia','1 medium fish',300,1],['Luwombo (steamed stew)','1 serving',350,1],
+['Roasted meat (muchomo)','100 g',250,1],['Egg, boiled','1 egg',78,1],['Groundnuts, roasted','1 handful',170,1],
+['Dodo / greens','1 serving',80],['Cabbage, cooked','1 serving',70],
+['Mandazi','1 piece',160],['Samosa','1 piece',150],['Bread with margarine','1 slice',110],['Sausage','1 piece',150],
+['Roasted maize (cob)','1 cob',150],['Banana, ripe','1 medium',105],['Mango','1 medium',200],['Pineapple','2 slices',80],
+['Avocado','½ fruit',160],['Watermelon','1 slice',45],['Passion fruit juice','1 glass',120],
+['Tea with milk & sugar','1 cup',80],['Black tea with sugar','1 cup',50],['Milk','1 cup',120],
+['Porridge (millet/maize)','1 cup',180],['Soda','300 ml',140]
+];
+var BY={};F.forEach(function(f){BY[f[0]]=f});
+var SIZES=[['Small',0.7],['Regular',1],['Large',1.4]];
+var POPULAR=['Matooke (steamed)','Posho (ugali)','Beans, stewed','Rolex (egg chapati roll)','Chapati','Rice, cooked','Mandazi','Banana, ripe'];
+var COMBOS=[
+['Posho (ugali)','Beans, stewed','Dodo / greens'],['Matooke (steamed)','Beans, stewed'],['Matooke (steamed)','Groundnut sauce'],
+['Rice, cooked','Beans, stewed','Cabbage, cooked'],['Sweet potato, boiled','Egg, boiled'],['Posho (ugali)','Fish stew','Dodo / greens'],
+['Millet bread (kalo)','Chicken stew','Dodo / greens'],['Cassava, boiled','Beans, stewed'],['Chapati','Beans, stewed'],
+['Rice, cooked','Goat meat stew','Cabbage, cooked'],['Matooke (steamed)','Fish stew','Dodo / greens'],['Rolex (egg chapati roll)'],
+['Banana, ripe','Groundnuts, roasted'],['Egg, boiled','Bread with margarine'],['Porridge (millet/maize)','Egg, boiled'],
+['Tea with milk & sugar','Mandazi'],['Posho (ugali)','Beef stew','Cabbage, cooked']
+];
+var SNACKS=['Banana, ripe','Groundnuts, roasted','Egg, boiled','Milk','Roasted maize (cob)','Sweet potato, boiled','Mandazi'];
+
+function iso(d){return d.toLocaleDateString('en-CA')}
+function addDays(s,n){var d=new Date(s+'T12:00:00');d.setDate(d.getDate()+n);return iso(d)}
+function dayKcal(S,d){return (S.foods[d]||[]).reduce(function(a,b){return a+b.kcal},0)}
+function label(n){return n.split(/[,(]/)[0].trim()}
+function comboKcal(c){return c.reduce(function(a,n){return a+(BY[n]?BY[n][2]:0)},0)}
+function kcal(f,sizeIndex){return Math.max(5,Math.round(f[2]*SIZES[sizeIndex][1]/5)*5)}
+function search(q){
+  q=(q||'').trim().toLowerCase();
+  if(!q)return POPULAR.map(function(n){return BY[n]});
+  var words=q.split(/\s+/);
+  return F.filter(function(f){var s=f[0].toLowerCase();return words.every(function(w){return s.indexOf(w)!==-1})}).slice(0,10);
+}
+
+function mealIdeas(S,snackOnly){
+  var today=iso(new Date()),left=S.goal-dayKcal(S,today),h=new Date().getHours();
+  if(left<120)return 'You are almost at your goal for today. If you are still hungry, choose something light like a banana, tea without sugar, or a glass of water.';
+  var kind=(snackOnly||h>=21)?'snack':h<11?'breakfast':h<16?'lunch':'dinner';
+  var target=Math.min(left,kind==='snack'?250:kind==='breakfast'?450:650);
+  var pool=(kind==='snack'?SNACKS.map(function(n){return [n]}):COMBOS).map(function(c){return {c:c,k:comboKcal(c)}});
+  var fit=pool.filter(function(x){return x.k<=target+60&&x.k>=target*0.45}).sort(function(a,b){return b.k-a.k});
+  if(!fit.length)fit=pool.sort(function(a,b){return a.k-b.k}).slice(0,3);
+  var r=new Date().getDate()%fit.length,picks=fit.slice(r).concat(fit.slice(0,r)).slice(0,3);
+  return 'You have about '+left+' kcal left today. Ideas for '+(kind==='snack'?'a snack':kind)+' (around '+target+' kcal):\n'+
+    picks.map(function(x){return '• '+x.c.map(label).join(' + ')+' (about '+x.k+' kcal)'}).join('\n')+
+    '\nThese are rough estimates. Try to include a protein food and some greens when you can.';
+}
+
+function tips(S){
+  var out=[],today=iso(new Date()),h=new Date().getHours(),i;
+  var eaten=dayKcal(S,today),goal=S.goal,left=goal-eaten,n=(S.foods[today]||[]).length;
+  if(goal<1200)out.push({k:'warn',t:'Your daily goal of '+goal+' kcal is quite low. Most adults need more, so please check with a doctor or dietitian before eating this little.'});
+  if(!n)out.push({k:'info',t:'Nothing logged yet today. Log your first meal to see how today is going.'});
+  else if(left<0)out.push({k:'info',t:'You are '+(-left)+' kcal over your goal today. One day over does not undo your progress. Just return to your usual target tomorrow.'});
+  else if(h>=20&&eaten<goal*0.6)out.push({k:'warn',t:'You have eaten '+eaten+' of your '+goal+' kcal today. Eating far too little can leave you tired and hungry later, so have a proper meal if you are hungry.'});
+  else out.push({k:'good',t:'You have '+left+' kcal left today.'});
+
+  var days=[];for(i=0;i<7;i++)days.push(addDays(today,-i));
+  var logged=days.filter(function(d){return dayKcal(S,d)>0});
+  if(logged.length){
+    var avg=Math.round(logged.reduce(function(a,d){return a+dayKcal(S,d)},0)/logged.length);
+    out.push({k:logged.length>=5?'good':'info',t:'You logged '+logged.length+' of the last 7 days'+(logged.length<4?'. Logging most days makes these tips more accurate.':'. Nice consistency.')});
+    out.push({k:avg>goal*1.1?'warn':'good',t:'On logged days you average '+avg+' kcal against a goal of '+goal+'.'+(avg>goal*1.1?' Smaller portions of staples like posho, rice or matooke are the easiest place to trim.':'')});
+    var m={Breakfast:0,Lunch:0,Dinner:0,Snack:0},tot=0,bDays=0;
+    logged.forEach(function(d){var hasB=false;(S.foods[d]||[]).forEach(function(x){m[x.meal]+=x.kcal;tot+=x.kcal;if(x.meal==='Breakfast')hasB=true});if(hasB)bDays++});
+    if(logged.length>=3&&tot>0&&m.Dinner/tot>0.5)out.push({k:'info',t:'More than half of your calories come at dinner. Moving some of them to lunch can make evenings easier.'});
+    if(logged.length>=4&&bDays<=1)out.push({k:'info',t:'You rarely log breakfast. If you get hungry mid-morning, something simple like tea with milk and a banana can help.'});
+  }
+  var streak=0,start=dayKcal(S,today)>0?0:1;
+  for(i=start;i<60;i++){if(dayKcal(S,addDays(today,-i))>0)streak++;else break}
+  if(streak>=3)out.push({k:'good',t:streak+'-day logging streak. Keep it going.'});
+
+  var wc=S.water[today]||0;
+  if(wc>=8)out.push({k:'good',t:'You reached 8 glasses of water today.'});
+  else if(wc<4&&h>=15)out.push({k:'info',t:'Only '+wc+' glass'+(wc===1?'':'es')+' of water so far today. Try a glass with your next meal.'});
+
+  var w=S.weights.slice().sort(function(a,b){return a.date<b.date?-1:1}).filter(function(x){return x.date>=addDays(today,-35)});
+  if(w.length>=2){
+    var a=w[0],b=w[w.length-1],span=(new Date(b.date)-new Date(a.date))/864e5;
+    if(span>=6){
+      var rate=(b.kg-a.kg)/(span/7),abs=Math.abs(rate).toFixed(1),gw=S.goalWt;
+      var losing=gw!==null&&gw<b.kg-0.2,gaining=gw!==null&&gw>b.kg+0.2;
+      if(losing){
+        if(rate<=-1)out.push({k:'warn',t:'You are losing about '+abs+' kg a week, which is faster than the usual 0.25 to 1 kg. Ease off if you can, and talk to a doctor or dietitian if you feel weak or dizzy.'});
+        else if(rate<-0.15){
+          var wk=(b.kg-gw)/(-rate),t='You are losing about '+abs+' kg a week, a steady pace.';
+          if(wk<=104){var d=new Date();d.setDate(d.getDate()+Math.round(wk*7));t+=' If this continues you could reach '+gw+' kg around '+d.toLocaleDateString('en-GB',{day:'numeric',month:'long'})+'.'}
+          out.push({k:'good',t:t});
+        }else if(rate<=0.15&&span>=14)out.push({k:'info',t:'Your weight has stayed about the same for '+Math.round(span/7)+' weeks. Daily weights bounce around, so check that your logging is complete, add a 20 to 30 minute walk, and give it two more weeks before changing your goal.'});
+        else if(rate>0.15)out.push({k:'info',t:'Your weight is up about '+abs+' kg a week. Check portion sizes of staples and sugary drinks, and make sure everything you eat is logged.'});
+      }else if(gaining){
+        out.push(rate>0.05?{k:'good',t:'You are gaining about '+abs+' kg a week toward your goal.'}:{k:'info',t:'Your weight is not moving toward your goal yet. Add an extra portion of a staple plus a protein food each day.'});
+      }else if(Math.abs(rate)>0.5)out.push({k:'info',t:'Your weight is changing by about '+abs+' kg a week. If you want to hold steady, adjust your portions a little.'});
+      else out.push({k:'good',t:'Your weight is steady.'});
+    }
+  }else out.push({k:'info',t:'Log your weight about once a week on the Weight tab to see your trend and goal date.'});
+
+  var rank={warn:0,good:1,info:2};
+  return out.map(function(x,j){x.i=j;return x}).sort(function(a,b){return rank[a.k]-rank[b.k]||a.i-b.i}).slice(0,7);
+}
+function tipLine(S){var t=tips(S);return t.length?t[0].t:''}
+
+function reply(text,S){
+  var q=' '+String(text).toLowerCase().replace(/[^a-z0-9\s'’\/-]/g,' ')+' ';
+  function has(re){return re.test(q)}
+  if(has(/suicid|kill myself|end my life|self.?harm|hurt myself/))
+    return 'I am really sorry you are feeling this way. You deserve support right now. Please reach out to someone you trust, or contact your local emergency number or a nearby health facility. You do not have to face this alone.';
+  if(has(/eating disorder|anorex|bulimi|purg|binge|starv|laxative|diet pill/))
+    return 'I cannot help with that safely. If food or weight feels out of control, or you are skipping meals or purging, please talk to a doctor or counsellor. Counting calories can make this harder, so it is okay to pause tracking and get support first.';
+  if(has(/diabet|pregnan|breastfeed|kidney|blood pressure|hypertens|ulcer|medicat|\bsick\b|faint|dizz|chest pain|cancer|hiv/))
+    return 'I cannot give medical advice for health conditions. Please talk to a doctor or dietitian about what is right for you. I can still help with general things like meal ideas from the food list.';
+  if(has(/lose.*fast|fast.*(weight|lose)|crash|fasting|detox|skip(ping)? meals|1 week|one week|quick(ly)?/))
+    return 'Fast weight loss usually backfires: you lose muscle and water, feel tired, and tend to regain it. A safe pace is about 0.25 to 1 kg a week. Small steps work better: smaller portions of staples, more water, more greens and beans, and a daily walk.';
+  if(has(/^\s*(hi|hello|hey|hallo|good (morning|afternoon|evening))\b/))
+    return 'Hello! I can tell you how your week is going, suggest what to eat next, explain your calorie goal, or help you log food. What would you like?';
+  if(has(/thank|thanks|cheers/))return 'You are welcome! I am here whenever you need me.';
+  if(has(/how am i doing|progress|summary|insight|\btips?\b|this week|streak|review|how.*going/))
+    return tips(S).slice(0,5).map(function(x){return '• '+x.t}).join('\n');
+  if(has(/snack/))return mealIdeas(S,true);
+  if(has(/what.*(eat|have|cook)|meal idea|ideas?|hungry|suggest|lunch|dinner|breakfast|next meal|recipe/))return mealIdeas(S,false);
+  if(has(/balanc|plate|healthy meal|nutrition|healthy eating/))
+    return 'A simple balanced plate: half greens or vegetables (dodo, cabbage, carrots), a quarter staple (matooke, posho, rice, sweet potato or cassava), and a quarter protein (beans, fish, eggs, chicken, meat or groundnuts). Add a fruit and drink water. Go easy on oil and sugary drinks.';
+  if(has(/protein/))
+    return 'Good protein foods in Uganda: beans, eggs, fish (omena, tilapia), chicken, goat or beef, groundnuts, milk and soya. Try to include one at every meal. It keeps you full for longer.';
+  if(has(/water|hydrat|thirst/))
+    return 'Aim for roughly 6 to 8 glasses of water a day. You may need more when it is hot or when you are active. A glass with each meal is an easy habit. Use the water counter on the Calories tab.';
+  if(has(/(calorie|goal|target).*(work|calculat|how|why|set|mean|come)|how.*(goal|calorie)|why.*(goal|calorie)/))
+    return 'Your goal starts from an estimate of the calories your body uses in a day (from age, sex, height and weight), multiplied by your activity level, minus about 500 kcal if you chose to lose weight. Your goal now is '+S.goal+' kcal. It is a rough starting point. If you are always hungry, or nothing changes after a few weeks, adjust it on the Weight tab under Goals.';
+  if(has(/photo|scan|picture|camera|pic\b/))
+    return 'Photo scanning needs an AI service, which may not be switched on in this app. You can always type a food name in the search box on the Calories tab. It has common Ugandan foods like matooke, posho, rolex and luwombo, with small, regular and large portions.';
+  if(has(/(change|edit|update|set).*(goal|weight|target|calorie)|goal weight|profile/))
+    return 'Go to the Weight tab and use the Goals card to change your daily calories and goal weight, then tap Save goals.';
+  if(has(/\blog\b|logging|add (a )?(meal|food)|track|enter|record|how do i use/))
+    return 'On the Calories tab: search a food (like matooke or rolex) and tap Small, Regular or Large, or use the quick-add buttons, or type your own food and calories and tap Add. Use the arrows to log another day. On the Weight tab you can save your weight and see your trend.';
+  if(has(/plateau|stuck|not losing|no progress|stopped losing/))
+    return 'Plateaus are normal. Check that you are logging everything, including oil, sugary tea and snacks. Add a 20 to 30 minute walk most days, sleep well, and give it two to three weeks before changing your goal.';
+  if(has(/sugar|soda|sweet|juice|candy|cake/))
+    return 'Sugary drinks add calories fast: a soda is about 140 kcal and tea with sugar adds up over the day. Try one less spoon of sugar, water or plain tea, and whole fruit instead of juice.';
+  if(has(/exercise|workout|walk|gym|run|jog|fitness/))
+    return 'Start with walking 20 to 30 minutes most days, then add more as it feels easy. Strength work like squats and push-ups twice a week helps too. If you have a health condition, check with a doctor first.';
+  return 'I can help with: how your week is going, what to eat next, a balanced plate, protein foods, water, how your calorie goal works, logging food, or breaking through a plateau. Try one of the buttons below.';
+}
+
+return {all:F,sizes:SIZES,search:search,kcal:kcal,tips:tips,tipLine:tipLine,reply:reply};
+})();
 (function(){
 var KEY='daily-tracker-v1';
 function defaultState(){return {goal:2000,goalWt:null,foods:{},weights:[],water:{},setupComplete:false}}
@@ -162,15 +318,13 @@ $('onboard-form').onsubmit=async function(e){
 };
 
 function tab(w){
-  ['food','wt','coach'].forEach(function(name){
+ ['food','wt','coach'].forEach(function(name){
     var selected=name===w;
     $('p-'+name).hidden=!selected;
     $('t-'+name).setAttribute('aria-selected',selected);
   });
+  if(w==='coach')renderInsights();
 }
-$('t-food').onclick=function(){tab('food')};
-$('t-wt').onclick=function(){tab('wt')};
-$('t-coach').onclick=function(){tab('coach')};
 
 function shift(n){var d=new Date(day+'T12:00:00');d.setDate(d.getDate()+n);day=iso(d);renderFood()}
 $('prev').onclick=function(){shift(-1)};$('next').onclick=function(){shift(1)};
@@ -321,6 +475,36 @@ $('chips').onclick=async function(e){
   if(await addFood(q[0],q[1],mealByHour()))message('food-message',q[0]+' added to today’s log.',false);
   else message('food-message','Could not save this food to your account. Check your connection and try again.',true);
 };
+var fsearch=$('fsearch'),fresults=$('fresults');
+function renderFoodResults(){
+  var list=FitCoach.search(fsearch.value);
+  fresults.innerHTML=list.length?list.map(function(f){
+    var idx=FitCoach.all.indexOf(f);
+    return '<div class="fres"><div class="fres-name"><b>'+esc(f[0])+'</b><small>'+esc(f[1])+'</small></div><div class="sizes">'+FitCoach.sizes.map(function(sz,si){
+      return '<button type="button" class="sz" data-f="'+idx+'" data-s="'+si+'" aria-label="Add '+esc(sz[0].toLowerCase()+' '+f[0])+', '+FitCoach.kcal(f,si)+' kcal"><span>'+sz[0]+'</span>'+FitCoach.kcal(f,si)+'</button>';
+    }).join('')+'</div></div>';
+  }).join(''):'<p class="note">No match. Type the food and its calories below instead.</p>';
+}
+fsearch.addEventListener('input',renderFoodResults);
+fresults.onclick=async function(e){
+  var b=e.target.closest('.sz');if(!b)return;
+  var f=FitCoach.all[Number(b.dataset.f)],si=Number(b.dataset.s),size=FitCoach.sizes[si];
+  var name=(f[0]+(si===1?'':' ('+size[0].toLowerCase()+')')).slice(0,60);
+  if(await addFood(name,FitCoach.kcal(f,si),mealByHour()))message('food-message',name+' added to today’s log.',false);
+  else message('food-message','Could not save this food to your account. Check your connection and try again.',true);
+};
+renderFoodResults();
+function renderTip(){
+  var el=$('tip'),t='';
+  try{t=FitCoach.tipLine(S)}catch(err){}
+  el.textContent=t;el.hidden=!t;
+}
+function renderInsights(){
+  var box=$('insights');if(!box)return;
+  var list=[];
+  try{list=FitCoach.tips(S)}catch(err){}
+  box.innerHTML=list.map(function(x){return '<p class="insight" data-k="'+x.k+'">'+esc(x.t)+'</p>'}).join('');
+}
 $('flist').onclick=async function(e){
   var b=e.target.closest('.x');if(!b)return;
   var previous=S.foods[day]||[];
@@ -503,7 +687,7 @@ async function addScanFood(item,button){
   item.feedback.className='scan-notes';
 }
 function showScanResults(result,previewUrl){
-  scanStatus.textContent='';
+  scanStatus.textContent='';k
   scanStatus.className='scan-status';
   if(previewUrl){
     var image=document.createElement('img');
@@ -603,7 +787,7 @@ scanInput.onchange=function(){
     showScanResults(result,scanPreviewUrl);
   }).catch(function(error){
     if(scanPreviewUrl){URL.revokeObjectURL(scanPreviewUrl);scanPreviewUrl=null}
-    scanMessage(error.message||'Could not scan this photo. Try again or add the food manually.',true);
+    scanMessage((error.message||'Could not scan this photo.')+' You can still search the food list below.',true);
   }).then(function(){
     scanPicker.setAttribute('aria-disabled','false');
     scanInput.disabled=false;
@@ -611,7 +795,7 @@ scanInput.onchange=function(){
 };
 
 var chatHistory=[];
-var chatPrompts=['How can I build a balanced meal?','How does my calorie goal work?','Give me a simple meal idea.'];
+var chatPrompts=[var chatPrompts=['How am I doing this week?','What should I eat next?','How can I build a balanced meal?','How does my calorie goal work?'];
 var chatInput=$('cin');
 var chatSend=$('csend');
 var chatMessages=$('msgs');
@@ -639,45 +823,14 @@ function coachContext(){
   };
 }
 function sendChatMessage(text){
-  text=(text||'').trim();
-  if(!text||text.length>300||chatSend.disabled)return;
-  if(window.location.protocol==='file:'){
-    addChatMessage('The coach needs the app server. In PowerShell, open the project folder, run npm start, then open http://localhost:3000.','error');
-    return;
-  }
+   text=(text||'').trim();
+  if(!text||text.length>300)return;
   chatInput.value='';
   addChatMessage(text,'user');
-  chatSend.disabled=true;
-  chatInput.disabled=true;
-  chatSend.textContent='Sending…';
-  var messages=chatHistory.concat([{role:'user',content:text}]).slice(-12);
-  var context=coachContext();
-  getAuthHeaders().then(function(headers){
-    headers['Content-Type']='application/json';
-    return fetch('/api/chat',{
-      method:'POST',
-      headers:headers,
-      body:JSON.stringify({messages:messages,context:context})
-    });
-  }).then(function(response){
-    return response.json().catch(function(){
-      throw new Error('The coach returned an invalid response.');
-    }).then(function(data){
-      if(!response.ok)throw new Error(data.error||'Could not send your message.');
-      return data;
-    });
-  }).then(function(data){
-    if(typeof data.reply!=='string'||!data.reply.trim())throw new Error('The coach returned an empty response. Please try again.');
-    chatHistory=messages.concat([{role:'assistant',content:data.reply}]).slice(-12);
-    addChatMessage(data.reply,'bot');
-  }).catch(function(error){
-    addChatMessage(error.message||'Could not reach the coach. Please try again.','error');
-  }).then(function(){
-    chatSend.disabled=false;
-    chatInput.disabled=false;
-    chatSend.textContent='Send';
-    chatInput.focus();
-  });
+  var answer;
+  try{answer=FitCoach.reply(text,S)}catch(err){answer='Sorry, I could not work that out. Try one of the buttons below.'}
+  addChatMessage(answer,'bot');
+  chatInput.focus();
 }
 chatSend.onclick=function(){sendChatMessage(chatInput.value)};
 chatInput.addEventListener('keydown',function(event){

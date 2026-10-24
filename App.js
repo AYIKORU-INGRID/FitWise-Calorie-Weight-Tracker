@@ -342,7 +342,7 @@ function renderFood(){
   $('remainlbl').textContent=left>=0?'kcal left':'kcal over';
   var r=$('ring');r.style.stroke=left<0?'var(--warn)':'var(--pri)';
   r.setAttribute('stroke-dashoffset',439.8*(1-Math.min(total/S.goal,1)));
-  $('flist').innerHTML=items.length?items.map(function(it){return '<li><div class="nm">'+esc(it.name)+'<small>'+esc(it.meal)+'</small></div><b>'+it.kcal+'</b><button class="x" data-id="'+it.id+'" aria-label="Delete '+esc(it.name)+'">✕</button></li>'}).join(''):'<li class="empty">Nothing logged yet. Add your first meal above.</li>';
+  $('flist').innerHTML=items.length?items.map(function(it){return '<li><div class="nm">'+esc(it.name)+'<small>'+esc(it.meal)+'</small></div><b>'+it.kcal+'</b><button class="x" data-id="'+it.id+'" aria-label="Delete '+esc(it.name)+'">✕</button></li>'}).join(''):'<li class="empty">Nothing logged yet. 'Add your first meal above.</li>';'
   renderWater();
     refreshPlan(false);
 }
@@ -968,6 +968,10 @@ async function authenticate(action){
     return;
   }
   if(!$('auth-form').reportValidity())return;
+  if(action==='signup'&&!$('consent').checked){
+    message('auth-status','Please tick the box to agree to the Terms and Privacy Policy before creating an account.',true);
+    return;
+  }
   var email=$('auth-email').value.trim();
   var password=$('auth-password').value;
   $('sign-in').disabled=true;

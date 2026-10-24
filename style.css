@@ -108,3 +108,12 @@ label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--mu
 .sz{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:.85rem;padding:5px 8px;border-radius:8px;cursor:pointer;text-align:center;line-height:1.25;min-width:54px}
 .sz span{display:block;color:var(--mute);font-size:.7rem}
 .sz:hover{border-color:var(--pri)}
+.legal{margin:24px 0 0;text-align:center;font-size:.8rem;color:var(--mute)}
+.legal a{color:var(--mute)}
+.doc{line-height:1.55}
+.doc h1{margin:8px 0 6px}
+.doc h2{margin:22px 0 6px}
+.doc p{margin:0 0 10px}
+.doc a{color:var(--pri)}
+.doc ul{list-style:disc;padding-left:22px;margin:0 0 10px}
+.doc li{display:list-item;border-top:0;padding:2px 0}

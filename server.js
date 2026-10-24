@@ -12,7 +12,7 @@ try {
   }
 } catch {}
 
-const HOST = process.env.HOST || "127.0.0.1";
+const HOST = process.env.HOST || (process.env.RENDER ? "0.0.0.0" : "127.0.0.1");
 const PORT = Number(process.env.PORT || 3000);
 const MAX_REQUEST_BYTES = 6 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
@@ -33,7 +33,11 @@ const STATIC_FILES = {
   "/index.html": ["index.html", "text/html; charset=utf-8"],
   "/App.js": ["App.js", "text/javascript; charset=utf-8"],
   "/app.js": ["App.js", "text/javascript; charset=utf-8"],
-  "/style.css": ["style.css", "text/css; charset=utf-8"],
+    "/style.css": ["style.css", "text/css; charset=utf-8"],
+  "/privacy": ["privacy.html", "text/html; charset=utf-8"],
+  "/privacy.html": ["privacy.html", "text/html; charset=utf-8"],
+  "/terms": ["terms.html", "text/html; charset=utf-8"],
+  "/terms.html": ["terms.html", "text/html; charset=utf-8"]
   "/logo.png": ["logo.png", "image/png"]
 };
 
@@ -535,6 +539,10 @@ async function chat(messages, context) {
 
 const server = http.createServer(async (request, response) => {
   const pathname = new URL(request.url, `http://${HOST}`).pathname;
+  if (request.method === "GET" && pathname === "/healthz") {
+    sendJson(response, 200, { ok: true });
+    return;
+  }
   if (request.method === "GET" && pathname === "/api/config") {
     sendJson(response, 200, {
       supabaseUrl: process.env.SUPABASE_URL || "",

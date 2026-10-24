@@ -11,7 +11,12 @@
   <p class="note">Create an account to keep your tracker data private and separate from other accounts.</p>
   <form id="auth-form">
     <label>Email<input id="auth-email" type="email" autocomplete="email" required></label>
-    <label>Password<input id="auth-password" type="password" autocomplete="current-password" minlength="8" required></label>
+    <label>Password
+      <span class="password-field">
+        <input id="auth-password" type="password" autocomplete="current-password" minlength="8" required>
+        <button class="password-toggle" id="toggle-password" type="button" aria-controls="auth-password" aria-label="Show password" aria-pressed="false">Show</button>
+      </span>
+    </label>
     <label class="auth-import"><input id="import-legacy" type="checkbox"> Import this browser’s previous tracker data into this account if it has no saved data.</label>
     <div class="row">
       <button class="btn" id="sign-in" type="button">Sign in</button>

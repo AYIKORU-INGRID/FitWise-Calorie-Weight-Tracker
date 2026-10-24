@@ -816,6 +816,14 @@ async function authenticate(action){
   }
 }
 async function initializeAuth(){
+  $('toggle-password').onclick=function(){
+    var password=$('auth-password');
+    var isVisible=password.type==='password';
+    password.type=isVisible?'text':'password';
+    $('toggle-password').textContent=isVisible?'Hide':'Show';
+    $('toggle-password').setAttribute('aria-label',isVisible?'Hide password':'Show password');
+    $('toggle-password').setAttribute('aria-pressed',String(isVisible));
+  };
   $('auth-form').onsubmit=function(event){event.preventDefault();authenticate('signin')};
   $('sign-in').onclick=function(){authenticate('signin')};
   $('sign-up').onclick=function(){authenticate('signup')};

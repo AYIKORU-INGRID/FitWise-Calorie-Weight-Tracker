@@ -3,12 +3,18 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const _supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-const _supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+const _supabasePublishableKey = String.fromEnvironment(
+  'SUPABASE_PUBLISHABLE_KEY',
+  defaultValue: String.fromEnvironment('SUPABASE_ANON_KEY'),
+);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (_supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty) {
-    await Supabase.initialize(url: _supabaseUrl, anonKey: _supabaseAnonKey);
+  if (_supabaseUrl.isNotEmpty && _supabasePublishableKey.isNotEmpty) {
+    await Supabase.initialize(
+      url: _supabaseUrl,
+      publishableKey: _supabasePublishableKey,
+    );
   }
   runApp(const FitWiseApp());
 }
@@ -32,7 +38,7 @@ class FitWiseApp extends StatelessWidget {
           border: OutlineInputBorder(),
         ),
       ),
-      home: _supabaseUrl.isEmpty || _supabaseAnonKey.isEmpty
+      home: _supabaseUrl.isEmpty || _supabasePublishableKey.isEmpty
           ? const _ConfigurationScreen()
           : const _SessionGate(),
     );
@@ -56,8 +62,9 @@ class _ConfigurationScreen extends StatelessWidget {
               Text('Connect FitWise', style: TextStyle(fontSize: 24)),
               SizedBox(height: 12),
               Text(
-                'Configure SUPABASE_URL and SUPABASE_ANON_KEY using the '
-                'mobile setup instructions, then restart the app.',
+                'Configure SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY (or '
+                'SUPABASE_ANON_KEY) using the mobile setup instructions, '
+                'then restart the app.',
                 textAlign: TextAlign.center,
               ),
             ],
@@ -121,7 +128,8 @@ class _SignInScreenState extends State<_SignInScreen> {
         );
         if (result.session == null && mounted) {
           setState(() {
-            _message = 'Check your email to confirm your account, then sign in.';
+            _message =
+                'Check your email to confirm your account, then sign in.';
           });
         }
       } else {
@@ -187,10 +195,9 @@ class _SignInScreenState extends State<_SignInScreen> {
                         autofillHints: const [AutofillHints.password],
                         decoration:
                             const InputDecoration(labelText: 'Password'),
-                        validator: (value) =>
-                            value == null || value.length < 6
-                                ? 'Use at least 6 characters.'
-                                : null,
+                        validator: (value) => value == null || value.length < 6
+                            ? 'Use at least 6 characters.'
+                            : null,
                       ),
                       if (_message != null) ...[
                         const SizedBox(height: 12),
@@ -297,9 +304,8 @@ class _TrackerData {
     final rawWaterGoal = preferences is Map ? preferences['waterGoal'] : null;
     final rawTheme = preferences is Map ? preferences['theme'] : null;
     return _TrackerData(
-      goal: rawGoal is int && rawGoal >= 800 && rawGoal <= 6000
-          ? rawGoal
-          : 2000,
+      goal:
+          rawGoal is int && rawGoal >= 800 && rawGoal <= 6000 ? rawGoal : 2000,
       goalWeight: rawGoalWeight is num ? rawGoalWeight.toDouble() : null,
       foods: foods,
       weights: weights,
@@ -351,8 +357,7 @@ class _TrackerScreenState extends State<_TrackerScreen> {
   int _tab = 0;
 
   String get _today => DateFormat('yyyy-MM-dd').format(DateTime.now());
-  List<Map<String, dynamic>> get _todayFoods =>
-      _data.foods[_today] ?? const [];
+  List<Map<String, dynamic>> get _todayFoods => _data.foods[_today] ?? const [];
   int get _todayCalories => _todayFoods.fold<int>(
         0,
         (total, food) => total + (food['kcal'] as int? ?? 0),
@@ -432,8 +437,11 @@ class _TrackerScreenState extends State<_TrackerScreen> {
   Future<void> _addFood() async {
     final name = _foodName.text.trim();
     final calories = int.tryParse(_foodCalories.text);
-    if (name.isEmpty || name.length > 60 || calories == null ||
-        calories < 1 || calories > 5000) {
+    if (name.isEmpty ||
+        name.length > 60 ||
+        calories == null ||
+        calories < 1 ||
+        calories > 5000) {
       setState(() => _error =
           'Enter a food name (up to 60 characters) and calories from 1 to 5000.');
       return;
@@ -662,7 +670,8 @@ class _TrackerScreenState extends State<_TrackerScreen> {
                 ),
                 const SizedBox(height: 12),
                 LinearProgressIndicator(
-                  value: (_todayCalories / _data.goal).clamp(0.0, 1.0).toDouble(),
+                  value:
+                      (_todayCalories / _data.goal).clamp(0.0, 1.0).toDouble(),
                   minHeight: 9,
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -725,7 +734,8 @@ class _TrackerScreenState extends State<_TrackerScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Add food', style: Theme.of(context).textTheme.titleMedium),
+                Text('Add food',
+                    style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _foodName,
@@ -861,8 +871,7 @@ class _TrackerScreenState extends State<_TrackerScreen> {
         else
           ...entries.map((entry) {
             final kg = (entry['kg'] as num).toDouble();
-            final value =
-                _data.weightUnit == 'lb' ? kg * 2.2046226218 : kg;
+            final value = _data.weightUnit == 'lb' ? kg * 2.2046226218 : kg;
             return Card(
               child: ListTile(
                 leading: const Icon(Icons.monitor_weight_outlined),

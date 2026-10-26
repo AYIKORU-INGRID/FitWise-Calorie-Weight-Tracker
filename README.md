@@ -56,11 +56,10 @@ To prepare an Android device preview on Windows:
    and [Android Studio](https://developer.android.com/studio), including an
    Android SDK and an emulator. In VS Code, install the Flutter extension (it
    also installs the Dart extension).
-2. In PowerShell, generate the Android runner files and fetch the app packages:
+2. In PowerShell, fetch the app packages:
 
    ```powershell
    cd mobile
-   flutter create --platforms android --project-name fitwise_mobile .
    flutter pub get
    ```
 
@@ -74,11 +73,13 @@ To prepare an Android device preview on Windows:
    ```powershell
    flutter run `
      --dart-define=SUPABASE_URL=https://your-project.supabase.co `
-     --dart-define=SUPABASE_ANON_KEY=your-supabase-publishable-or-anon-key
+     --dart-define=SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
    ```
 
    Use the same Supabase URL and publishable (or legacy `anon`) key as the web
-   app. Never use the Supabase `service_role` or secret key in the mobile app.
+   app. For a legacy `anon` key, use
+   `--dart-define=SUPABASE_ANON_KEY=your-supabase-anon-key` instead. Never use
+   the Supabase `service_role` or secret key in the mobile app.
    iOS Simulator previews require macOS; on Windows, use an Android emulator or
    Android phone.
 

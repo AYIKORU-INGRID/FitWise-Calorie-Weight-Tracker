@@ -43,6 +43,49 @@ only in the current browser page.
 
 Run `npm run check` to check the JavaScript syntax.
 
+## Native Flutter app
+
+The companion Android app lives in [`mobile`](./mobile). It keeps the existing
+web app and Supabase backend, and supports account sign-in, calorie logging,
+weight tracking, and water tracking. Both clients use the same private
+`tracker_data` record, protected by Supabase row-level security.
+
+To prepare an Android device preview on Windows:
+
+1. Install the [Flutter SDK for Windows](https://docs.flutter.dev/get-started/install/windows/mobile)
+   and [Android Studio](https://developer.android.com/studio), including an
+   Android SDK and an emulator. In VS Code, install the Flutter extension (it
+   also installs the Dart extension).
+2. In PowerShell, generate the Android runner files and fetch the app packages:
+
+   ```powershell
+   cd mobile
+   flutter create --platforms android --project-name fitwise_mobile .
+   flutter pub get
+   ```
+
+3. Start an Android emulator from Android Studio's Device Manager, or connect
+   an Android phone with USB debugging enabled.
+4. Select the Flutter device in VS Code and start the
+   **FitWise Flutter (Android device)** launch configuration. To connect the
+   app to your Supabase account, provide the compile-time values as shown here
+   (a launch without these values displays the setup screen):
+
+   ```powershell
+   flutter run `
+     --dart-define=SUPABASE_URL=https://your-project.supabase.co `
+     --dart-define=SUPABASE_ANON_KEY=your-supabase-publishable-or-anon-key
+   ```
+
+   Use the same Supabase URL and publishable (or legacy `anon`) key as the web
+   app. Never use the Supabase `service_role` or secret key in the mobile app.
+   iOS Simulator previews require macOS; on Windows, use an Android emulator or
+   Android phone.
+
+Figma can also be used with VS Code: install Figma's VS Code extension for
+design handoff, or configure Figma's Dev Mode MCP server in VS Code to provide
+design context to compatible coding assistants.
+
 ## Settings and Premium
 
 Signed-in users can save an appearance preference, weight units, and a daily
